@@ -6,6 +6,7 @@ import itemRoutes from './itemRoutes.js';
 import orderRoutes from './orderRoutes.js';
 import reportRoutes from './reportRoutes.js';
 import warehouseRoutes from './warehouseRoutes.js';
+import userRoutes from './userRoutes.js';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/items', itemRoutes);
 router.use('/orders', orderRoutes);
 router.use('/reports', reportRoutes);
 router.use('/warehouses', warehouseRoutes);
+router.use('/users', userRoutes);
 
 export default router;

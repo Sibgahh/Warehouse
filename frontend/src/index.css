@@ -262,9 +262,11 @@ a { text-decoration: none; color: inherit; }
   letter-spacing: 0.5px;
 }
 .badge.accent { background: var(--accent-light); color: var(--accent); }
-.badge.success { background: var(--success-light); color: var(--success); }
+.badge.success, .badge-success { background: var(--success-light); color: var(--success); }
 .badge.warning { background: var(--warning-light); color: var(--warning); }
 .badge.error { background: var(--error-light); color: var(--error); }
+.badge-info { background: var(--accent-light); color: var(--accent); }
+.badge-default, .badge-secondary { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
 
 .form-group select {
   padding: 8px 12px;
@@ -448,6 +450,11 @@ a { text-decoration: none; color: inherit; }
    PAGE & DASHBOARD
 ═════════════════════════════════════════════════════ */
 .page { display: flex; flex-direction: column; gap: 20px; }
+.page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
 .page-header {
   display: flex;
   align-items: center;
@@ -455,11 +462,16 @@ a { text-decoration: none; color: inherit; }
   flex-wrap: wrap;
   gap: 12px;
 }
-.page-header h1 {
+.page-title {
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-h);
   line-height: 1.2;
+}
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .stats-grid {

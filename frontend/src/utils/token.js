@@ -11,13 +11,10 @@ export function decodeToken(token) {
   try {
     const base64Url = token.split('.')[1];
     if (!base64Url) return null;
+    // Ganti karakter URL-safe base64 → standard base64
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-3))
-        .join('')
-    );
+    // Buffer.from handles UTF-8 correctly in both Node.js and browser
+    const jsonPayload = Buffer.from(base64, 'base64').toString('utf8');
     return JSON.parse(jsonPayload);
   } catch {
     return null;

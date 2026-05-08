@@ -1,0 +1,384 @@
+// ==============================
+// Prisma Schema - Warehouse Management System
+// Database: warehouse_test (MySQL)
+// ==============================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ==============================
+// AUTH & USER MANAGEMENT
+// ==============================
+
+/// Role pengguna (Admin, Manager, Staff, dll)
+model Role {
+  role_id    Int       @id @default(autoincrement()) @db.UnsignedTinyInt
+  role_code  String    @unique(map: "roles_unique") @db.VarChar(8)
+  role_name  String    @db.VarChar(80)
+  is_active  Boolean?  @default(false) /// 1 = Active, 0 = Inactive
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
+
+  // Relations
+  users         User[]
+  role_menus    RoleMenu[]
+  role_submenus RoleSubmenu[]
+
+  @@map("roles")
+}
+
+/// User pengguna sistem
+model User {
+  user_id              Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_name            String    @db.VarChar(50)
+  full_name            String    @db.VarChar(150)
+  password             String    @db.Text
+  role_id              Int       @db.UnsignedTinyInt
+  is_active            Boolean?  @default(false) /// 1 = Active, 0 = Inactive
+  must_change_password Boolean?  @default(false) /// 1 = Harus ganti password saat login
+  is_login             Boolean?  @default(false) /// 1 = Sedang login, 0 = Sudah logout
+  created_at           DateTime  @default(now()) @db.DateTime(0)
+  updated_at           DateTime? @db.DateTime(0)
+
+  // Relations
+  role Role @relation(fields: [role_id], references: [role_id], map: "users_roles_FK")
+
+  // Reverse relations (created_by / updated_by audit trail)
+  items_created          Item[]          @relation("items_created_idTousers")
+  items_updated          Item[]          @relation("items_updated_idTousers")
+  orders_created         Order[]         @relation("orders_created_idTousers")
+  orders_approved        Order[]         @relation("orders_approval_idTousers")
+  orders_updated         Order[]         @relation("orders_last_updated_idTousers")
+  orders_verified        Order[]         @relation("orders_verified_idTousers")
+  order_details_created  OrderDetail[]   @relation("order_details_created_idTousers")
+  order_details_received OrderDetail[]   @relation("order_details_received_idTousers")
+  stores_created         Store[]         @relation("stores_created_idTousers")
+  stores_updated         Store[]         @relation("stores_updated_idTousers")
+  suppliers_created      Supplier[]      @relation("suppliers_created_idTousers")
+  suppliers_updated      Supplier[]      @relation("suppliers_updated_idTousers")
+  warehouses_created     Warehouse[]     @relation("warehouses_created_idTousers")
+  warehouses_updated     Warehouse[]     @relation("warehouses_updated_idTousers")
+
+  @@unique([user_name, role_id, is_active], map: "users_unique")
+  @@index([role_id], map: "users_roles_FK")
+  @@map("users")
+}
+
+// ==============================
+// MENU & PERMISSION
+// ==============================
+
+/// Menu utama navigasi
+model Menu {
+  menu_id       Int     @id @default(autoincrement()) @db.UnsignedSmallInt
+  menu_sequence String  @db.VarChar(5)
+  menu_name     String  @db.VarChar(80)
+  menu_icon     String? @db.VarChar(150)
+  menu_link     String? @default("#") @db.VarChar(150)
+  is_submenu    Boolean @default(false)
+  is_active     Boolean @default(true)
+
+  // Relations
+  submenus   Submenu[]
+  role_menus RoleMenu[]
+
+  @@unique([menu_sequence, menu_name], map: "menus_unique")
+  @@map("menus")
+}
+
+/// Sub-menu (child dari Menu)
+model Submenu {
+  submenu_id       Int     @id @default(autoincrement()) @db.UnsignedSmallInt
+  menu_id          Int     @db.UnsignedSmallInt
+  submenu_sequence String  @db.VarChar(5)
+  submenu_name     String  @db.VarChar(80)
+  submenu_icon     String? @db.VarChar(150)
+  submenu_link     String  @default("#") @db.VarChar(150)
+  is_active        Boolean @default(true)
+
+  // Relations
+  menu          Menu          @relation(fields: [menu_id], references: [menu_id], onUpdate: Restrict, map: "submenus_menus_FK")
+  role_submenus RoleSubmenu[]
+
+  @@unique([menu_id, submenu_sequence, submenu_name], map: "submenus_unique")
+  @@map("submenus")
+}
+
+/// Pivot: Role → Menu (akses menu per role)
+model RoleMenu {
+  role_menu_id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  role_id      Int    @db.UnsignedTinyInt
+  menu_id      Int    @db.UnsignedSmallInt
+
+  // Relations
+  menu Menu @relation(fields: [menu_id], references: [menu_id], map: "role_menus_menus_FK")
+  role Role @relation(fields: [role_id], references: [role_id], map: "role_menus_roles_FK")
+
+  @@unique([menu_id, role_id], map: "role_menus_unique")
+  @@index([role_id], map: "role_menus_roles_FK")
+  @@map("role_menus")
+}
+
+/// Pivot: Role → Submenu (akses submenu per role)
+model RoleSubmenu {
+  role_submenu_id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  role_id         Int    @db.UnsignedTinyInt
+  submenu_id      Int    @db.UnsignedSmallInt
+
+  // Relations
+  role    Role    @relation(fields: [role_id], references: [role_id], map: "role_submenus_roles_FK")
+  submenu Submenu @relation(fields: [submenu_id], references: [submenu_id], map: "role_submenus_submenus_FK")
+
+  @@unique([role_id, submenu_id], map: "role_submenus_unique")
+  @@index([submenu_id], map: "role_submenus_submenus_FK")
+  @@map("role_submenus")
+}
+
+// ==============================
+// MASTER DATA
+// ==============================
+
+/// Warehouse / Gudang
+model Warehouse {
+  warehouse_id   Int              @id @default(autoincrement()) @db.UnsignedSmallInt
+  warehouse_code String           @unique(map: "warehouses_unique") @db.VarChar(5)
+  warehouse_name String?          @db.VarChar(150)
+  email          String?          @db.VarChar(150)
+  phone_number   String?          @db.VarChar(14)
+  city           String?          @db.VarChar(80)
+  regency        String?          @db.VarChar(80)
+  address        String?          @db.VarChar(180)
+  status         WarehouseStatus  @default(A) /// A = Active, C = Close
+  created_at     DateTime         @default(now()) @db.DateTime(0)
+  created_id     Int              @db.UnsignedInt
+  updated_at     DateTime?        @db.DateTime(0)
+  updated_id     Int?             @db.UnsignedInt
+
+  // Relations
+  created_by User  @relation("warehouses_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "warehouses_users_FK")
+  updated_by User? @relation("warehouses_updated_idTousers", fields: [updated_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "warehouses_users_FK_1")
+  orders     Order[]
+
+  @@index([created_id], map: "warehouses_users_FK")
+  @@index([updated_id], map: "warehouses_users_FK_1")
+  @@map("warehouses")
+}
+
+/// Store / Toko
+model Store {
+  store_id     BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  store_code   String      @unique(map: "stores_unique") @db.VarChar(5)
+  store_name   String      @unique(map: "stores_unique_1") @db.VarChar(150)
+  email        String?     @db.VarChar(150)
+  phone_number String?     @db.VarChar(14)
+  city         String?     @db.VarChar(80)
+  regency      String?     @db.VarChar(80)
+  address      String?     @db.VarChar(180)
+  status       StoreStatus @default(A) /// A = Active, C = Close
+  created_at   DateTime    @default(now()) @db.DateTime(0)
+  created_id   Int         @db.UnsignedInt
+  updated_at   DateTime?   @db.DateTime(0)
+  updated_id   Int?        @db.UnsignedInt
+
+  // Relations
+  created_by User  @relation("stores_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "stores_users_FK")
+  updated_by User? @relation("stores_updated_idTousers", fields: [updated_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "stores_users_FK_1")
+
+  @@index([created_id], map: "stores_users_FK")
+  @@index([updated_id], map: "stores_users_FK_1")
+  @@map("stores")
+}
+
+/// Supplier / Pemasok
+model Supplier {
+  supplier_id   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  supplier_code String    @unique(map: "suppliers_unique") @db.Char(10)
+  supplier_name String    @db.VarChar(180)
+  email         String?   @db.VarChar(150)
+  phone_number  String?   @db.VarChar(14)
+  city          String?   @db.VarChar(80)
+  regency       String?   @db.VarChar(80)
+  address       String?   @db.VarChar(180)
+  is_active     Boolean?  @default(false) /// 1 = Active, 0 = Inactive
+  created_at    DateTime  @default(now()) @db.DateTime(0)
+  created_id    Int       @db.UnsignedInt
+  updated_at    DateTime? @db.DateTime(0)
+  updated_id    Int?      @db.UnsignedInt
+
+  // Relations
+  created_by User   @relation("suppliers_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "suppliers_users_FK")
+  updated_by User?  @relation("suppliers_updated_idTousers", fields: [updated_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "suppliers_users_FK_1")
+  items      Item[]
+  orders     Order[]
+
+  @@index([created_id], map: "suppliers_users_FK")
+  @@index([updated_id], map: "suppliers_users_FK_1")
+  @@map("suppliers")
+}
+
+/// Item / Barang
+model Item {
+  item_id     BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  item_name   String     @unique(map: "items_unique") @db.Char(12)
+  description String     @db.VarChar(200)
+  status      ItemStatus @default(A) /// A = Active, I = Inactive, C = Close
+  std_qty     Decimal    @db.Decimal(4, 2)
+  min_stock   Decimal    @default(0.00) @db.Decimal(4, 2)
+  max_stock   Decimal    @db.Decimal(4, 2)
+  unit_cost   Float      @db.Float /// Harga Beli
+  unit_retail Float      @db.Float /// Harga Jual
+  supplier_id BigInt     @db.UnsignedBigInt
+  created_at  DateTime   @default(now()) @db.DateTime(0)
+  created_id  Int        @db.UnsignedInt
+  updated_at  DateTime?  @db.DateTime(0)
+  updated_id  Int?       @db.UnsignedInt
+
+  // Relations
+  supplier      Supplier     @relation(fields: [supplier_id], references: [supplier_id], onUpdate: Restrict, map: "items_suppliers_FK")
+  created_by    User         @relation("items_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "items_users_FK")
+  updated_by    User?        @relation("items_updated_idTousers", fields: [updated_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "items_users_FK_1")
+  inventory     Inventory?
+  order_details OrderDetail[]
+
+  @@index([supplier_id], map: "items_suppliers_FK")
+  @@index([created_id], map: "items_users_FK")
+  @@index([updated_id], map: "items_users_FK_1")
+  @@map("items")
+}
+
+// ==============================
+// INVENTORY
+// ==============================
+
+/// Stok barang di warehouse
+model Inventory {
+  inventory_id    BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  item_id         BigInt    @unique(map: "inventory_unique") @db.UnsignedBigInt
+  on_hand_qty     Decimal   @default(0.00) @db.Decimal(8, 2)
+  on_ordered_qty  Decimal?  @db.Decimal(8, 2)
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  last_updated_at DateTime? @db.DateTime(0)
+
+  // Relations (1:1 dengan Item)
+  item Item @relation(fields: [item_id], references: [item_id], map: "inventory_items_FK")
+
+  @@map("inventory")
+}
+
+// ==============================
+// ORDER / PURCHASE ORDER
+// ==============================
+
+/// Status order (Open, InTransit, Receiving, Verified, Cancelled)
+model OrderStatus {
+  order_status_id Int    @id @default(autoincrement()) @db.UnsignedTinyInt
+  status_code     String @unique(map: "order_statuses_unique") @db.Char(5)
+  status_name     String @db.VarChar(100)
+
+  // Relations
+  orders Order[]
+
+  @@map("order_statuses")
+}
+
+/// Order / Purchase Order ke Supplier
+model Order {
+  order_id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  order_number        String    @db.Char(10)
+  warehouse_id        Int       @db.UnsignedSmallInt
+  supplier_id         BigInt    @db.UnsignedBigInt
+  delivery_start_date DateTime  @db.Date
+  delivery_end_date   DateTime  @db.Date
+  order_status_id     Int       @db.UnsignedTinyInt
+  created_id          Int       @db.UnsignedInt
+  approval_id         Int       @db.UnsignedInt
+  created_at          DateTime  @default(now()) @db.DateTime(0)
+  last_updated_at     DateTime? @db.DateTime(0)
+  last_updated_id     Int?      @db.UnsignedInt
+  verified_id         Int?      @db.UnsignedInt
+  verified_at         DateTime? @db.DateTime(0)
+
+  // Relations
+  warehouse    Warehouse   @relation(fields: [warehouse_id], references: [warehouse_id], map: "orders_warehouses_FK")
+  supplier     Supplier    @relation(fields: [supplier_id], references: [supplier_id], map: "orders_suppliers_FK")
+  order_status OrderStatus @relation(fields: [order_status_id], references: [order_status_id], map: "orders_order_statuses_FK")
+  created_by   User        @relation("orders_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "orders_users_FK")
+  approved_by  User        @relation("orders_approval_idTousers", fields: [approval_id], references: [user_id], onUpdate: Restrict, map: "orders_users_FK_1")
+  updated_by   User?       @relation("orders_last_updated_idTousers", fields: [last_updated_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "orders_users_FK_2")
+  verified_by  User?       @relation("orders_verified_idTousers", fields: [verified_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "orders_users_FK_3")
+
+  // Reverse
+  order_details OrderDetail[]
+
+  @@index([warehouse_id], map: "orders_warehouses_FK")
+  @@index([supplier_id], map: "orders_suppliers_FK")
+  @@index([order_status_id], map: "orders_order_statuses_FK")
+  @@index([created_id], map: "orders_users_FK")
+  @@index([approval_id], map: "orders_users_FK_1")
+  @@index([last_updated_id], map: "orders_users_FK_2")
+  @@index([verified_id], map: "orders_users_FK_3")
+  @@map("orders")
+}
+
+/// Detail line item dalam order
+model OrderDetail {
+  order_detail_id   BigInt    @id @db.UnsignedBigInt
+  order_id          BigInt    @db.UnsignedBigInt
+  item_id           BigInt    @db.UnsignedBigInt
+  qty_ordered       Decimal   @db.Decimal(5, 2)
+  qty_received      Decimal?  @db.Decimal(5, 2)
+  qty_cancelled     Decimal?  @db.Decimal(5, 2)
+  reason_cancelled  String?   @db.VarChar(150)
+  created_id        Int       @db.UnsignedInt
+  created_at        DateTime  @default(now()) @db.DateTime(0)
+  updated_at        DateTime? @db.DateTime(0)
+  received_id       Int?      @db.UnsignedInt
+  last_receive_dttm DateTime? @db.DateTime(0)
+
+  // Relations
+  item        Item   @relation(fields: [item_id], references: [item_id], map: "order_details_items_FK")
+  order       Order  @relation(fields: [order_id], references: [order_id], map: "order_details_orders_FK")
+  created_by  User   @relation("order_details_created_idTousers", fields: [created_id], references: [user_id], onUpdate: Restrict, map: "order_details_users_FK")
+  received_by User?  @relation("order_details_received_idTousers", fields: [received_id], references: [user_id], onDelete: Restrict, onUpdate: Restrict, map: "order_details_users_FK_1")
+
+  @@index([item_id], map: "order_details_items_FK")
+  @@index([order_id], map: "order_details_orders_FK")
+  @@index([created_id], map: "order_details_users_FK")
+  @@index([received_id], map: "order_details_users_FK_1")
+  @@map("order_details")
+}
+
+// ==============================
+// ENUMS
+// ==============================
+
+/// Status item: A = Active, I = Inactive, C = Close
+enum ItemStatus {
+  A
+  I
+  C
+
+  @@map("items_status")
+}
+
+/// Status store: A = Active, C = Close
+enum StoreStatus {
+  A
+  C
+
+  @@map("stores_status")
+}
+
+/// Status warehouse: A = Active, C = Close
+enum WarehouseStatus {
+  A
+  C
+
+  @@map("warehouses_status")
+}

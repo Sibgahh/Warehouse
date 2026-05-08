@@ -1,0 +1,26 @@
+# Dependency directories
+node_modules/
+frontend/node_modules/
+
+# Environment variables
+.env
+frontend/.env
+*.local
+
+# Build outputs
+dist/
+frontend/dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# IDE / Editors
+.vscode/
+.idea/
+.DS_Store
+
+# Prisma
+/generated/prisma/

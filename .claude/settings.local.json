@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"import\\('bcryptjs'\\).then\\(b => b.default.hash\\('password123', 10\\).then\\(h => console.log\\(h\\)\\)\\)\")",
+      "Bash(mysql -u root warehouse_test)",
+      "Bash(where mysql *)",
+      "Bash(dir /s /b \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\")",
+      "Bash(dir /s /b \"C:\\\\Program Files\\\\MySQL\\\\bin\\\\mysql.exe\")",
+      "Bash(dir /s /b \"C:\\\\ProgramData\\\\MySQL\\\\MySQL Server*\\\\bin\\\\mysql.exe\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test)",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"DESCRIBE items;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"DESCRIBE users; DESCRIBE suppliers; DESCRIBE orders;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='warehouse_test' AND TABLE_NAME='items' ORDER BY ORDINAL_POSITION;\")",
+      "Bash('C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe' -u root warehouse_test -e ' *)",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SHOW CREATE TABLE items\\\\G\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT COUNT\\(*\\) as col_count FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='warehouse_test' AND TABLE_NAME='items';\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT COLUMN_NAME, ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='warehouse_test' AND TABLE_NAME='items' ORDER BY ORDINAL_POSITION;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT supplier_id, supplier_code, supplier_name FROM suppliers;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT item_id, item_name, supplier_id FROM items; SELECT COUNT\\(*\\) as cnt FROM items;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"INSERT INTO items \\(item_id, item_name, description, status, std_qty, min_stock, max_stock, unit_cost, unit_retail, supplier_id, created_id\\) VALUES \\(1, 'BRG000001', 'Test', 'A', 1, 1, 1, 1, 1, 1\\);\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT item_id, item_name, description, status, std_qty, min_stock, max_stock, unit_cost, unit_retail, supplier_id, created_at, created_id, updated_at, updated_id FROM items LIMIT 1;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT * FROM items LIMIT 0;\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"INSERT INTO items \\(item_id, item_name, description, status, std_qty, min_stock, max_stock, unit_cost, unit_retail, supplier_id, created_at, created_id, updated_at, updated_id\\) VALUES \\(1, 'BRG000001', 'Test', 'A', 1.00, 1.00, 1.00, 1, 1, 1, NOW\\(\\), 1, NULL, NULL\\);\")",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"DELETE FROM items; SELECT COUNT\\(*\\) FROM items;\")",
+      "Bash(node -e ' *)",
+      "Bash(node gen_seed.mjs)",
+      "Bash(\"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root warehouse_test -e \"SELECT user_id,user_name,full_name,role_id,is_active FROM users; SELECT COUNT\\(*\\) as suppliers FROM suppliers; SELECT COUNT\\(*\\) as items FROM items;\")",
+      "Bash(curl -s http://localhost:3000/api/suppliers)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s http://localhost:3000/api/items)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(node -e \"import\\('./src/routes/index.js'\\).then\\(m => console.log\\(Object.keys\\(m.default ? m.default._namedRoutes || m.default : {}\\)\\)\\).catch\\(e => console.error\\(e.message\\)\\)\")",
+      "Bash(node --input-type=module)",
+      "Bash(node -e \"import\\('./src/app.js'\\).then\\(m => { const a = m.default; console.log\\('Stack:', a._router ? 'has router' : 'no router'\\); }\\).catch\\(e => console.error\\(e.message\\)\\)\")",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(curl -s http://localhost:3000/api)",
+      "Bash(powershell -Command \"Get-Content src/routes/index.js -Raw | Select-String 'items'\")",
+      "Bash(powershell -Command \"Get-ChildItem .nodemoncache -ErrorAction SilentlyContinue | Select-Object Name, LastWriteTime\")"
+    ]
+  }
+}

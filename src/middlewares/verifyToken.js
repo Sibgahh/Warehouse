@@ -26,6 +26,7 @@ const verifyToken = (req, res, next) => {
     req.user = {
       user_id: decoded.user_id,
       role_id: decoded.role_id,
+      role_code: decoded.role_code || null,
     };
 
     next();

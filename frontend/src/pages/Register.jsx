@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../services/api';
 
 const ROLES = [
-  { value: '1', label: 'Admin' },
   { value: '2', label: 'Staff' },
 ];
 
@@ -15,7 +14,7 @@ export default function Register() {
     fullName: '',
     password: '',
     confirmPassword: '',
-    roleId: '1',
+    roleId: '2', // Default ke Staff — ADMIN cuma dipilih oleh admin
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,8 +36,8 @@ export default function Register() {
       setError('Password dan konfirmasi password tidak cocok.');
       return;
     }
-    if (form.password.length < 4) {
-      setError('Password minimal 4 karakter.');
+    if (form.password.length < 8) {
+      setError('Password minimal 8 karakter.');
       return;
     }
 
@@ -68,8 +67,8 @@ export default function Register() {
       <div className="auth-card">
         <h1>Daftar</h1>
         <p className="auth-subtitle">
-          Buat akun untuk development —{' '}
-          <span className="dev-badge">DEV ONLY</span>
+          Pembuatan user baru — hanya untuk{' '}
+          <span className="dev-badge">ADMIN</span>
         </p>
 
         {error && (
@@ -115,7 +114,7 @@ export default function Register() {
               autoComplete="new-password"
               value={form.password}
               onChange={handleChange}
-              placeholder="Min. 4 karakter"
+              placeholder="Min. 8 karakter"
               disabled={loading}
             />
           </div>

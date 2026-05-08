@@ -139,6 +139,8 @@ export const getById = async (req, res, next) => {
 /**
  * POST /api/items
  * Buat item baru
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (itemCreateSchema).
  */
 export const create = async (req, res, next) => {
   try {
@@ -154,21 +156,7 @@ export const create = async (req, res, next) => {
       supplier_id,
     } = req.body;
 
-    if (item_name === undefined || description === undefined || std_qty === undefined || max_stock === undefined || unit_cost === undefined || unit_retail === undefined || supplier_id === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'item_name, description, std_qty, max_stock, unit_cost, unit_retail, dan supplier_id wajib diisi',
-      });
-    }
-
-    if (item_name.length > 12) {
-      return res.status(400).json({
-        success: false,
-        message: 'item_name maksimal 12 karakter',
-      });
-    }
-
-    // Cek duplikat item_name
+    // ─── Cek duplikat item_name ───
     const existing = await prisma.item.findUnique({ where: { item_name } });
     if (existing) {
       return res.status(409).json({
@@ -177,8 +165,10 @@ export const create = async (req, res, next) => {
       });
     }
 
-    // Cek supplier exists
-    const supplier = await prisma.supplier.findUnique({ where: { supplier_id: BigInt(supplier_id) } });
+    // ─── Cek supplier exists ───
+    const supplier = await prisma.supplier.findUnique({
+      where: { supplier_id },
+    });
     if (!supplier) {
       return res.status(400).json({ success: false, message: 'Supplier tidak ditemukan' });
     }
@@ -193,7 +183,7 @@ export const create = async (req, res, next) => {
         max_stock: Number(max_stock),
         unit_cost: Number(unit_cost),
         unit_retail: Number(unit_retail),
-        supplier_id: BigInt(supplier_id),
+        supplier_id,
         created_id: req.user.user_id,
       },
       select: itemSelect,
@@ -214,33 +204,43 @@ export const create = async (req, res, next) => {
 /**
  * PUT /api/items/:id
  * Update item
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (itemUpdateSchema).
  */
 export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { item_name, description, status, std_qty, min_stock, max_stock, unit_cost, unit_retail, supplier_id } = req.body;
+    const {
+      item_name,
+      description,
+      status,
+      std_qty,
+      min_stock,
+      max_stock,
+      unit_cost,
+      unit_retail,
+      supplier_id,
+    } = req.body;
 
     const existing = await prisma.item.findUnique({ where: { item_id: BigInt(id) } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Item tidak ditemukan' });
     }
 
-    if (item_name && item_name.length > 12) {
-      return res.status(400).json({
-        success: false,
-        message: 'item_name maksimal 12 karakter',
-      });
-    }
-
     if (item_name && item_name !== existing.item_name) {
-      const duplicate = await prisma.item.findFirst({ where: { item_name, NOT: { item_id: BigInt(id) } } });
+      const duplicate = await prisma.item.findFirst({
+        where: { item_name, NOT: { item_id: BigInt(id) } },
+      });
       if (duplicate) {
-        return res.status(409).json({ success: false, message: `Item dengan nama '${item_name}' sudah ada` });
+        return res.status(409).json({
+          success: false,
+          message: `Item dengan nama '${item_name}' sudah ada`,
+        });
       }
     }
 
     if (supplier_id) {
-      const supplier = await prisma.supplier.findUnique({ where: { supplier_id: BigInt(supplier_id) } });
+      const supplier = await prisma.supplier.findUnique({ where: { supplier_id } });
       if (!supplier) {
         return res.status(400).json({ success: false, message: 'Supplier tidak ditemukan' });
       }
@@ -250,14 +250,14 @@ export const update = async (req, res, next) => {
       where: { item_id: BigInt(id) },
       data: {
         ...(item_name && { item_name }),
-        ...(description && { description }),
+        ...(description !== undefined && { description }),
         ...(status && { status }),
         ...(std_qty !== undefined && { std_qty: Number(std_qty) }),
         ...(min_stock !== undefined && { min_stock: Number(min_stock) }),
         ...(max_stock !== undefined && { max_stock: Number(max_stock) }),
         ...(unit_cost !== undefined && { unit_cost: Number(unit_cost) }),
         ...(unit_retail !== undefined && { unit_retail: Number(unit_retail) }),
-        ...(supplier_id && { supplier_id: BigInt(supplier_id) }),
+        ...(supplier_id && { supplier_id }),
         updated_id: req.user.user_id,
       },
       select: itemSelect,

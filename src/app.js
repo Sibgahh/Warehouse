@@ -13,11 +13,25 @@ BigInt.prototype.toJSON = function () {
 
 const app = express();
 
-// ==============================
-// Global Middlewares
-// ==============================
+// ─── CORS: whitelist specific origins ───
+// ALLOWED_ORIGINS = comma-separated list, contoh: http://localhost:5173,https://myapp.com
+// Kosongkan atau * = accept all (hanya untuk dev)
+const rawOrigins = process.env.ALLOWED_ORIGINS || '';
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length > 0 && !allowedOrigins.includes('*')
+      ? allowedOrigins
+      : undefined,
+    credentials: true,
+  })
+);
+
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logger);
@@ -31,7 +45,7 @@ app.use('/api', routes);
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'POS API is running 🚀',
+    message: 'Warehouse Management API is running 🚀',
     version: '1.0.0',
   });
 });

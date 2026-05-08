@@ -35,13 +35,14 @@ api.interceptors.response.use(
 export const login = (user_name, password) =>
   api.post('/api/auth/login', { user_name, password });
 
-// Dev-only register — hapus setelah production
+// Register — теперь требует ADMIN токен
 export const register = (data) =>
   api.post('/api/auth/register', data);
 
-export const logout = () => {
-  localStorage.removeItem('token');
-};
+export const logout = () =>
+  api.post('/api/auth/logout').finally(() => {
+    localStorage.removeItem('token');
+  });
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────
 export const getSuppliers = (params) => api.get('/api/suppliers', { params });

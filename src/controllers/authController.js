@@ -5,18 +5,14 @@ import prisma from '../config/prisma.js';
 /**
  * Register - Buat user baru
  * POST /api/auth/register
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (registerSchema).
+ * req.body sudah berisi data yang sudah di-parse & transformed.
+ * Di controller ini hanya cek DUPLIKAT & role validity (business logic).
  */
 export const register = async (req, res, next) => {
   try {
     const { user_name, full_name, password, role_id } = req.body;
-
-    // ─── Validasi input ───
-    if (!user_name || !password || !role_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'user_name, password, dan role_id wajib diisi',
-      });
-    }
 
     // ─── Cek apakah username sudah ada ───
     const existingUser = await prisma.user.findFirst({
@@ -86,18 +82,12 @@ export const register = async (req, res, next) => {
 /**
  * Login - Autentikasi user & generate JWT
  * POST /api/auth/login
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (loginSchema).
  */
 export const login = async (req, res, next) => {
   try {
     const { user_name, password } = req.body;
-
-    // ─── Validasi input ───
-    if (!user_name || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'user_name dan password wajib diisi',
-      });
-    }
 
     // ─── Cari user berdasarkan username ───
     const user = await prisma.user.findFirst({
@@ -138,9 +128,11 @@ export const login = async (req, res, next) => {
     }
 
     // ─── Generate JWT ───
+    // Include role_code di payload supaya checkRole tidak perlu query DB
     const payload = {
       user_id: user.user_id,
       role_id: user.role_id,
+      role_code: user.role.role_code,
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
@@ -210,6 +202,33 @@ export const getMe = async (req, res, next) => {
       success: true,
       message: 'Data user berhasil diambil',
       data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Logout - Reset is_login = false & invalidasi token
+ * POST /api/auth/logout
+ *
+ * NOTE: JWT bersifat stateless — tidak bisa di-"revoke" langsung dari server.
+ * Untuk token invalidasi instan, gunakan JWT blacklist (Redis/set) atau
+ * короткоживущий access token + refresh token.
+ * Di sini kita minimal reset is_login + catat di audit log.
+ */
+export const logout = async (req, res, next) => {
+  try {
+    await prisma.user.update({
+      where: { user_id: req.user.user_id },
+      data: { is_login: false },
+    });
+
+    console.log(`[AUTH] User logged out: user_id:${req.user.user_id}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout berhasil. Token tidak lagi valid setelah expiry.',
     });
   } catch (error) {
     next(error);

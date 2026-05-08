@@ -8,6 +8,7 @@ import Items from './pages/Items';
 import Orders from './pages/Orders';
 import Reports from './pages/Reports';
 import Warehouses from './pages/Warehouses';
+import { getRoleFromToken } from './utils/token.js';
 
 // ── Auth guard ─────────────────────────────────────────────────────────────────
 function RequireAuth({ children }) {
@@ -20,6 +21,21 @@ function RequireAuth({ children }) {
 function GuestOnly({ children }) {
   const token = localStorage.getItem('token');
   if (token) return <Navigate to="/" replace />;
+  return children;
+}
+
+// ── ADMIN-only guard for Register page ─────────────────────────────────────────
+// Non-ADMIN users yang mencoba akses /register akan di-redirect ke /
+// ADMIN dapat mengakses halaman register untuk mendaftarkan Staff
+// SECURITY: role_code dibaca dari JWT token, BUKAN dari localStorage.
+function AdminOnly({ children }) {
+  const token = localStorage.getItem('token');
+  if (!token) return <Navigate to="/login" replace />;
+
+  // Decode role_code langsung dari token (tidak dari localStorage user object)
+  const roleCode = getRoleFromToken();
+  if (roleCode !== 'ADMIN') return <Navigate to="/" replace />;
+
   return children;
 }
 
@@ -40,9 +56,9 @@ export default function App() {
         <Route
           path="/register"
           element={
-            <GuestOnly>
+            <AdminOnly>
               <Register />
-            </GuestOnly>
+            </AdminOnly>
           }
         />
 

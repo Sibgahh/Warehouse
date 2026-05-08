@@ -25,20 +25,27 @@ function parseDateFilter(start_date, end_date) {
  *
  * Total order per supplier, dengan breakdown per status.
  * Filter: ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+ *
+ * SECURITY FIX: Menggunakan $queryRaw (template tag) — parameterized,
+ * TIDAK ada string interpolation. ? placeholder di-escape secara type-safe
+ * oleh Prisma, menangkal SQL injection.
  */
 export const ordersPerSupplier = async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
 
-    // ─── Build date params untuk raw SQL ───
-    const hasDateFilter = start_date || end_date;
+    // ─── Parameterized date range ───
+    // Selalu gunakan $queryRaw (template tag), BUKAN $queryRawUnsafe.
+    // Parameter di-pass sebagai template values, bukan di-interpolasi.
     const startParam = start_date || '1970-01-01';
     const endParam = end_date
       ? `${end_date} 23:59:59`
       : '2099-12-31 23:59:59';
 
-    // ─── Raw SQL: lebih efisien untuk aggregate + JOIN ───
-    const results = await prisma.$queryRawUnsafe(`
+    // ─── Raw SQL parameterized (aman) ───
+    // ${placeholder} = parameterized, di-escape oleh Prisma.
+    // JANJAN tidak pakai string interpolation langsung di SQL string.
+    const results = await prisma.$queryRaw`
       SELECT
         s.supplier_id,
         s.supplier_code,
@@ -63,10 +70,10 @@ export const ordersPerSupplier = async (req, res, next) => {
         FROM order_details od
         GROUP BY od.order_id
       ) detail_agg ON detail_agg.order_id = o.order_id
-      WHERE o.created_at BETWEEN ? AND ?
+      WHERE o.created_at BETWEEN ${startParam} AND ${endParam}
       GROUP BY s.supplier_id, s.supplier_code, s.supplier_name
       ORDER BY total_orders DESC
-    `, startParam, endParam);
+    `;
 
     // ─── Convert BigInt fields ───
     const data = results.map((row) => ({
@@ -106,6 +113,9 @@ export const ordersPerSupplier = async (req, res, next) => {
  *
  * Total qty ordered & received per item, across all orders.
  * Filter: ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&supplier_id=X
+ *
+ * SECURITY FIX: Menggunakan $queryRaw (template tag) dengan parameterized
+ * supplier_id via tagged template. String interpolation DIHAPUS.
  */
 export const qtyPerItem = async (req, res, next) => {
   try {
@@ -116,37 +126,64 @@ export const qtyPerItem = async (req, res, next) => {
       ? `${end_date} 23:59:59`
       : '2099-12-31 23:59:59';
 
-    // ─── Supplier filter clause ───
-    const supplierClause = supplier_id
-      ? `AND o.supplier_id = ${Number(supplier_id)}`
-      : '';
+    // ─── Supplier filter: parameterized (aman) ───
+    // supplier_id di-pass sebagai tagged-template value,
+    // BUKAN di-interpolasi langsung ke SQL string.
+    const supplierNum = supplier_id ? Number(supplier_id) : null;
 
-    const results = await prisma.$queryRawUnsafe(`
-      SELECT
-        i.item_id,
-        i.item_name,
-        i.description,
-        i.unit_cost,
-        i.unit_retail,
-        s.supplier_code,
-        s.supplier_name,
-        COUNT(DISTINCT o.order_id)                   AS total_orders,
-        SUM(od.qty_ordered)                          AS total_qty_ordered,
-        SUM(COALESCE(od.qty_received, 0))            AS total_qty_received,
-        SUM(COALESCE(od.qty_cancelled, 0))           AS total_qty_cancelled,
-        SUM(od.qty_ordered) - SUM(COALESCE(od.qty_received, 0))
-          - SUM(COALESCE(od.qty_cancelled, 0))       AS qty_outstanding,
-        SUM(od.qty_ordered * i.unit_cost)             AS total_cost_value
-      FROM order_details od
-      INNER JOIN orders o ON o.order_id = od.order_id
-      INNER JOIN items i ON i.item_id = od.item_id
-      INNER JOIN suppliers s ON s.supplier_id = i.supplier_id
-      WHERE o.created_at BETWEEN ? AND ?
-      ${supplierClause}
-      GROUP BY i.item_id, i.item_name, i.description, i.unit_cost, i.unit_retail,
-               s.supplier_code, s.supplier_name
-      ORDER BY total_qty_ordered DESC
-    `, startParam, endParam);
+    // ─── SQL parameterized via $queryRaw ───
+    const results = supplierNum
+      ? await prisma.$queryRaw`
+          SELECT
+            i.item_id,
+            i.item_name,
+            i.description,
+            i.unit_cost,
+            i.unit_retail,
+            s.supplier_code,
+            s.supplier_name,
+            COUNT(DISTINCT o.order_id)                   AS total_orders,
+            SUM(od.qty_ordered)                          AS total_qty_ordered,
+            SUM(COALESCE(od.qty_received, 0))            AS total_qty_received,
+            SUM(COALESCE(od.qty_cancelled, 0))           AS total_qty_cancelled,
+            SUM(od.qty_ordered) - SUM(COALESCE(od.qty_received, 0))
+              - SUM(COALESCE(od.qty_cancelled, 0))       AS qty_outstanding,
+            SUM(od.qty_ordered * i.unit_cost)             AS total_cost_value
+          FROM order_details od
+          INNER JOIN orders o ON o.order_id = od.order_id
+          INNER JOIN items i ON i.item_id = od.item_id
+          INNER JOIN suppliers s ON s.supplier_id = i.supplier_id
+          WHERE o.created_at BETWEEN ${startParam} AND ${endParam}
+            AND o.supplier_id = ${supplierNum}
+          GROUP BY i.item_id, i.item_name, i.description, i.unit_cost, i.unit_retail,
+                   s.supplier_code, s.supplier_name
+          ORDER BY total_qty_ordered DESC
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            i.item_id,
+            i.item_name,
+            i.description,
+            i.unit_cost,
+            i.unit_retail,
+            s.supplier_code,
+            s.supplier_name,
+            COUNT(DISTINCT o.order_id)                   AS total_orders,
+            SUM(od.qty_ordered)                          AS total_qty_ordered,
+            SUM(COALESCE(od.qty_received, 0))            AS total_qty_received,
+            SUM(COALESCE(od.qty_cancelled, 0))           AS total_qty_cancelled,
+            SUM(od.qty_ordered) - SUM(COALESCE(od.qty_received, 0))
+              - SUM(COALESCE(od.qty_cancelled, 0))       AS qty_outstanding,
+            SUM(od.qty_ordered * i.unit_cost)             AS total_cost_value
+          FROM order_details od
+          INNER JOIN orders o ON o.order_id = od.order_id
+          INNER JOIN items i ON i.item_id = od.item_id
+          INNER JOIN suppliers s ON s.supplier_id = i.supplier_id
+          WHERE o.created_at BETWEEN ${startParam} AND ${endParam}
+          GROUP BY i.item_id, i.item_name, i.description, i.unit_cost, i.unit_retail,
+                   s.supplier_code, s.supplier_name
+          ORDER BY total_qty_ordered DESC
+        `;
 
     const data = results.map((row) => ({
       item_id: Number(row.item_id),
@@ -170,7 +207,7 @@ export const qtyPerItem = async (req, res, next) => {
       filter: {
         start_date: start_date || null,
         end_date: end_date || null,
-        supplier_id: supplier_id ? Number(supplier_id) : null,
+        supplier_id: supplierNum,
       },
       summary: {
         total_items: data.length,
@@ -190,7 +227,7 @@ export const qtyPerItem = async (req, res, next) => {
  *
  * Dashboard summary: quick overview angka-angka penting.
  */
-export const summary = async (req, res, next) => {
+export const summary = async (_req, res, next) => {
   try {
     const [
       totalOrders,

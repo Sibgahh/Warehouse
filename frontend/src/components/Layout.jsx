@@ -1,4 +1,6 @@
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { logout } from '../services/api';
+import { getRoleFromToken } from '../utils/token.js';
 
 const IconDashboard = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
 const IconSupplier = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -14,12 +16,18 @@ export default function Layout() {
 
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
-  const role = user?.role?.role_code || '';
+  // SECURITY: role dibaca dari JWT token, bukan dari localStorage object
+  // localStorage['user'] bisa dimanipulasi user via DevTools
+  const role = getRoleFromToken() || '';
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout(); // Panggil backend untuk reset is_login = false
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
   };
 
   const NavItem = ({ to, icon: Icon, label, activeOnlyIndex = false }) => {
@@ -66,6 +74,13 @@ export default function Layout() {
               <NavItem to="/suppliers" icon={IconSupplier} label="Suppliers" />
               <NavItem to="/items" icon={IconItem} label="Items" />
               <NavItem to="/warehouses" icon={IconWarehouse} label="Warehouses" />
+            </div>
+          )}
+
+          {role === 'ADMIN' && (
+            <div className="nav-group">
+              <label>Admin</label>
+              <NavItem to="/register" icon={IconSupplier} label="Manajemen User" />
             </div>
           )}
 

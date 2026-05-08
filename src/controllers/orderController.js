@@ -64,35 +64,37 @@ const orderDetailSelect = {
 };
 
 /**
- * Generate order number: PO-YYYYMMDD-XXX
+ * Generate order number: PO-YYMMDD-XX
+ *
+ * SECURITY FIX: Dipanggil di DALAM transaction dengan row-level lock
+ * (SELECT ... FOR UPDATE) untuk mencegah race condition saat 2+
+ * request concurrently mencoba generate nomor yang sama.
+ *
+ * @param {object} tx - Prisma transaction client
+ * @returns {string} contoh: "PO26050801"
  */
-async function generateOrderNumber() {
+async function generateOrderNumber(tx) {
   const today = new Date();
   const dateStr =
     today.getFullYear().toString() +
     String(today.getMonth() + 1).padStart(2, '0') +
     String(today.getDate()).padStart(2, '0');
 
-  // Prefix: PO + tanggal = "PO20260504" (10 char max)
-  const prefix = `PO${dateStr}`;
-
-  // Hitung jumlah order hari ini
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const count = await prisma.order.count({
-    where: {
-      created_at: {
-        gte: startOfDay,
-        lt: endOfDay,
-      },
-    },
-  });
+  // ─── Atomic count dalam transaction dengan FOR UPDATE lock ───
+  // Mengunci baris-baris yang match WHERE sehingga request lain
+  // harus menunggu sampai transaction ini selesai.
+  const [{ 'COUNT(*)': count }] = await tx.$queryRaw`
+    SELECT COUNT(*) FROM orders
+    WHERE created_at >= ${startOfDay}
+      AND created_at <  ${endOfDay}
+    FOR UPDATE
+  `;
 
-  // Nomor urut tidak dipakai di prefix karena 10 char limit
-  // Pakai format: PO{YYMMDD}XX → "PO26050401"
-  const shortDate = dateStr.slice(2); // "260504"
-  const seq = String(count + 1).padStart(2, '0');
+  const shortDate = dateStr.slice(2); // "260508"
+  const seq = String(Number(count) + 1).padStart(2, '0');
   return `PO${shortDate}${seq}`;
 }
 
@@ -101,11 +103,10 @@ async function generateOrderNumber() {
  * Buat order baru dengan multiple items (transaction)
  *
  * Flow:
- * 1. Validasi input (header + items)
- * 2. Validasi relasi (warehouse, supplier, items exist)
- * 3. Generate order_number
- * 4. Transaction: insert order → insert order_details
- * 5. Return order lengkap
+ * 1. Validasi relasi (warehouse, supplier, items exist) — Zod sudah validasi input
+ * 2. Generate order_number (dalam transaction, race-condition safe)
+ * 3. Transaction: insert order → insert order_details
+ * 4. Return order lengkap
  */
 export const create = async (req, res, next) => {
   try {
@@ -115,72 +116,14 @@ export const create = async (req, res, next) => {
       delivery_start_date,
       delivery_end_date,
       approval_id,
-      items, // Array: [{ item_id, qty_ordered }]
+      items,
     } = req.body;
 
-    // ════════════════════════════════
-    // 1. VALIDASI INPUT
-    // ════════════════════════════════
-
-    // ─── Header fields ───
-    if (!warehouse_id || !supplier_id || !delivery_start_date || !delivery_end_date || !approval_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'warehouse_id, supplier_id, delivery_start_date, delivery_end_date, dan approval_id wajib diisi',
-      });
-    }
-
-    // ─── Items array ───
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'items wajib berupa array dan minimal 1 item',
-      });
-    }
-
-    // ─── Validasi setiap item ───
-    const itemErrors = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-
-      if (!item.item_id) {
-        itemErrors.push(`items[${i}]: item_id wajib diisi`);
-      }
-      if (!item.qty_ordered || Number(item.qty_ordered) <= 0) {
-        itemErrors.push(`items[${i}]: qty_ordered harus lebih dari 0`);
-      }
-    }
-
-    if (itemErrors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validasi items gagal',
-        errors: itemErrors,
-      });
-    }
-
-    // ─── Cek duplikat item_id dalam request ───
-    const itemIds = items.map((i) => BigInt(i.item_id));
-    const uniqueItemIds = [...new Set(itemIds.map(String))];
-    if (uniqueItemIds.length !== items.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Terdapat item_id duplikat dalam request',
-      });
-    }
-
-    // ─── Validasi delivery date ───
-    const startDate = new Date(delivery_start_date);
-    const endDate = new Date(delivery_end_date);
-    if (endDate < startDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'delivery_end_date tidak boleh sebelum delivery_start_date',
-      });
-    }
+    // item_ids dari parsed body (sudah BigInt oleh Zod)
+    const itemIds = items.map((i) => i.item_id);
 
     // ════════════════════════════════
-    // 2. VALIDASI RELASI
+    // 1. VALIDASI RELASI
     // ════════════════════════════════
 
     // ─── Warehouse exists? ───
@@ -216,18 +159,18 @@ export const create = async (req, res, next) => {
       });
     }
 
-    // ─── All items exist? ───
+    // ─── All items exist & active? ───
     const existingItems = await prisma.item.findMany({
       where: {
         item_id: { in: itemIds },
-        status: 'A', // hanya item aktif
+        status: 'A',
       },
       select: { item_id: true, item_name: true, status: true },
     });
 
     if (existingItems.length !== items.length) {
       const foundIds = existingItems.map((i) => String(i.item_id));
-      const notFound = uniqueItemIds.filter((id) => !foundIds.includes(id));
+      const notFound = itemIds.filter((id) => !foundIds.includes(String(id)));
       return res.status(400).json({
         success: false,
         message: `Item dengan id [${notFound.join(', ')}] tidak ditemukan atau tidak aktif`,
@@ -246,15 +189,15 @@ export const create = async (req, res, next) => {
     }
 
     // ════════════════════════════════
-    // 3. GENERATE ORDER NUMBER
+    // 2. TRANSACTION: INSERT ORDER + DETAILS
     // ════════════════════════════════
-    const orderNumber = await generateOrderNumber();
+    const orderResult = await prisma.$transaction(async (tx) => {
+      // ─── 2a. Generate & insert order header ───
+      // Order number di-generate di DALAM transaction dengan row-level lock
+      // (SELECT ... FOR UPDATE) sehingga 2 request konkuren tidak bisa
+      // dapat nomor yang sama.
+      const orderNumber = await generateOrderNumber(tx);
 
-    // ════════════════════════════════
-    // 4. TRANSACTION: INSERT ORDER + DETAILS
-    // ════════════════════════════════
-    const order = await prisma.$transaction(async (tx) => {
-      // ─── 4a. Insert order header ───
       const newOrder = await tx.order.create({
         data: {
           order_number: orderNumber,
@@ -269,18 +212,19 @@ export const create = async (req, res, next) => {
       });
 
       // ─── 4b. Insert order details (bulk) ───
-      // order_detail_id is NOT auto-increment, generate sequential IDs
-      // Get max existing order_detail_id
-      const maxDetail = await tx.orderDetail.findFirst({
-        orderBy: { order_detail_id: 'desc' },
-        select: { order_detail_id: true },
-      });
-      let nextDetailId = maxDetail ? Number(maxDetail.order_detail_id) + 1 : 1;
+      // order_detail_id BUKAN auto-increment — generate sequential IDs
+      // dengan FOR UPDATE lock di transaction yang sama.
+      const [{ 'MAX(order_detail_id)': maxId }] = await tx.$queryRaw`
+        SELECT MAX(order_detail_id) AS \`max_order_detail_id\`
+        FROM order_details
+        FOR UPDATE
+      `;
+      let nextDetailId = maxId ? Number(maxId) + 1 : 1;
 
       const detailData = items.map((item) => ({
         order_detail_id: BigInt(nextDetailId++),
         order_id: newOrder.order_id,
-        item_id: BigInt(item.item_id),
+        item_id: item.item_id, // Sudah BigInt dari Zod schema
         qty_ordered: Number(item.qty_ordered),
         created_id: req.user.user_id,
       }));
@@ -289,21 +233,24 @@ export const create = async (req, res, next) => {
         data: detailData,
       });
 
-      // ─── 4c. Return complete order ───
-      return await tx.order.findUnique({
-        where: { order_id: newOrder.order_id },
-        select: orderDetailSelect,
-      });
+      // ─── 4c. Return order_number + complete order ───
+      return {
+        orderNumber,
+        data: await tx.order.findUnique({
+          where: { order_id: newOrder.order_id },
+          select: orderDetailSelect,
+        }),
+      };
     });
 
     console.log(
-      `[ORDER] Created: ${orderNumber} | Warehouse: ${warehouse.warehouse_code} | Supplier: ${supplier.supplier_code} | Items: ${items.length} | by user_id:${req.user.user_id}`
+      `[ORDER] Created: ${orderResult.orderNumber} | Warehouse: ${warehouse.warehouse_code} | Supplier: ${supplier.supplier_code} | Items: ${items.length} | by user_id:${req.user.user_id}`
     );
 
     res.status(201).json({
       success: true,
       message: 'Order berhasil dibuat',
-      data: order,
+      data: orderResult.data,
     });
   } catch (error) {
     next(error);

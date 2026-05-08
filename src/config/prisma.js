@@ -10,9 +10,16 @@ const adapter = new PrismaMariaDb({
   database: process.env.DB_NAME || 'warehouse_test',
 });
 
+// ─── Log level berdasarkan environment ───
+// DEV: log semua query (gunakan hanya saat development)
+// PROD: hanya warn & error, tidak expose struktur query sensitif
+const isDev = process.env.NODE_ENV !== 'production';
+
 const prisma = new PrismaClient({
   adapter,
-  log: ['query', 'info', 'warn', 'error'],
+  ...(isDev
+    ? { log: ['query', 'info', 'warn', 'error'] }
+    : { log: ['warn', 'error'] }),
 });
 
 export default prisma;

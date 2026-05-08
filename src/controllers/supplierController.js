@@ -126,6 +126,8 @@ export const getById = async (req, res, next) => {
 /**
  * POST /api/suppliers
  * Buat supplier baru
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (supplierCreateSchema).
  */
 export const create = async (req, res, next) => {
   try {
@@ -139,21 +141,6 @@ export const create = async (req, res, next) => {
       address,
       is_active,
     } = req.body;
-
-    // ─── Validasi wajib ───
-    if (!supplier_code || !supplier_name) {
-      return res.status(400).json({
-        success: false,
-        message: 'supplier_code dan supplier_name wajib diisi',
-      });
-    }
-
-    if (supplier_code.length > 10) {
-      return res.status(400).json({
-        success: false,
-        message: 'supplier_code maksimal 10 karakter',
-      });
-    }
 
     // ─── Cek duplikat supplier_code ───
     const existing = await prisma.supplier.findUnique({
@@ -198,6 +185,8 @@ export const create = async (req, res, next) => {
 /**
  * PUT /api/suppliers/:id
  * Update supplier berdasarkan ID
+ *
+ * NOTE: Input sudah divalidasi Zod di middleware (supplierUpdateSchema).
  */
 export const update = async (req, res, next) => {
   try {
@@ -225,34 +214,21 @@ export const update = async (req, res, next) => {
       });
     }
 
-    // ─── Validasi wajib ───
-    if (!supplier_code || !supplier_name) {
-      return res.status(400).json({
-        success: false,
-        message: 'supplier_code dan supplier_name wajib diisi',
-      });
-    }
-
-    if (supplier_code.length > 10) {
-      return res.status(400).json({
-        success: false,
-        message: 'supplier_code maksimal 10 karakter',
-      });
-    }
-
     // ─── Cek duplikat supplier_code (exclude current) ───
-    const duplicate = await prisma.supplier.findFirst({
-      where: {
-        supplier_code,
-        NOT: { supplier_id: BigInt(id) },
-      },
-    });
-
-    if (duplicate) {
-      return res.status(409).json({
-        success: false,
-        message: `Supplier dengan kode '${supplier_code}' sudah digunakan supplier lain`,
+    if (supplier_code !== existing.supplier_code) {
+      const duplicate = await prisma.supplier.findFirst({
+        where: {
+          supplier_code,
+          NOT: { supplier_id: BigInt(id) },
+        },
       });
+
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: `Supplier dengan kode '${supplier_code}' sudah digunakan supplier lain`,
+        });
+      }
     }
 
     // ─── Update supplier ───

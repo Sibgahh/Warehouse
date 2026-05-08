@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 // ==============================
 app.listen(PORT, () => {
   console.log('╔══════════════════════════════════════╗');
-  console.log('║        POS BACKEND SERVER            ║');
+  console.log('║    WAREHOUSE MANAGEMENT API         ║');
   console.log('╠══════════════════════════════════════╣');
   console.log(`║  🚀 Server  : http://localhost:${PORT}  ║`);
   console.log(`║  🌍 Env     : ${(process.env.NODE_ENV || 'development').padEnd(20)} ║`);

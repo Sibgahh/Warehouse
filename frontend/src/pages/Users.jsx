@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getUsers, updateUser, register } from '../services/api';
+import { getUsers, updateUser, register, deleteUser } from '../services/api';
 import { decodeToken } from '../utils/token';
+import ModalDialog from '../components/ModalDialog';
 
 const ROLE_LABELS = {
   1: 'Admin',
@@ -27,6 +28,7 @@ export default function Users() {
   const [editForm, setEditForm] = useState({ full_name: '', role_id: 2, is_active: true });
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
     useEffect(() => {
     (async () => {
@@ -126,6 +128,19 @@ export default function Users() {
         .finally(() => setLoading(false));
     } catch (err) {
       setEditError(err.response?.data?.message || 'Gagal memperbarui user.');
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteUser(deleteTarget.user_id);
+      setUsers((prev) => prev.filter((u) => Number(u.user_id) !== Number(deleteTarget.user_id)));
+      setDeleteTarget(null);
+      setEditSuccess(`User ${deleteTarget.user_name} berhasil dihapus.`);
+    } catch (err) {
+      setEditError(err.response?.data?.message || 'Gagal menghapus user.');
+      setDeleteTarget(null);
     }
   };
 
@@ -285,7 +300,10 @@ export default function Users() {
                       </td>
                       <td>
                         {Number(user.user_id) !== Number(currentUserId) ? (
-                          <button className="btn-edit" onClick={() => startEdit(user)}>Edit</button>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn-edit" onClick={() => startEdit(user)}>Edit</button>
+                            <button className="btn-icon btn-delete" title="Hapus user" onClick={() => setDeleteTarget(user)}>✕</button>
+                          </div>
                         ) : (
                           <span style={{ color: '#888', fontSize: 12 }}>Akun sendiri</span>
                         )}
@@ -298,6 +316,16 @@ export default function Users() {
           </table>
         )}
       </div>
+
+      <ModalDialog
+        open={Boolean(deleteTarget)}
+        title="Hapus User"
+        message={`Yakin ingin menghapus user ${deleteTarget?.user_name}?`}
+        showCancel={true}
+        confirmText="Hapus"
+        onConfirm={handleDeleteUser}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

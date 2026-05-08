@@ -273,6 +273,39 @@ export const orderCreateSchema = z.object({
     ),
 });
 
+export const orderUpdateSchema = z.object({
+  warehouse_id: z
+    .string()
+    .transform((v) => Number(v))
+    .refine((v) => Number.isInteger(v) && v > 0, { message: 'warehouse_id harus angka positif' })
+    .optional(),
+  supplier_id: z
+    .string()
+    .transform((v) => BigInt(v))
+    .refine((v) => v > 0n, { message: 'supplier_id harus positif' })
+    .optional(),
+  delivery_start_date: z
+    .string()
+    .refine((v) => !isNaN(Date.parse(v)), { message: 'delivery_start_date format tidak valid (YYYY-MM-DD)' })
+    .optional(),
+  delivery_end_date: z
+    .string()
+    .refine((v) => !isNaN(Date.parse(v)), { message: 'delivery_end_date format tidak valid (YYYY-MM-DD)' })
+    .optional(),
+  approval_id: z
+    .string()
+    .transform((v) => Number(v))
+    .refine((v) => Number.isInteger(v) && v > 0, { message: 'approval_id harus angka positif' })
+    .optional(),
+  order_status_id: z
+    .string()
+    .transform((v) => Number(v))
+    .refine((v) => Number.isInteger(v) && v > 0, { message: 'order_status_id harus angka positif' })
+    .optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'Minimal satu field harus diisi',
+});
+
 // ─── Warehouse: Create ───────────────────────────────────────────────────────
 export const warehouseCreateSchema = z.object({
   warehouse_code: z

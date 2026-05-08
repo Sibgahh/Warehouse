@@ -12,8 +12,8 @@ const { prismaMock } = vi.hoisted(() => {
     supplier: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     item: { findMany: vi.fn() },
-    orderStatus: { findFirst: vi.fn() },
-    order: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
+    orderStatus: { findFirst: vi.fn(), findUnique: vi.fn() },
+    order: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     orderDetail: { findFirst: vi.fn(), createMany: vi.fn() },
     $queryRaw: vi.fn(),
   };
@@ -28,7 +28,7 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock('../src/config/prisma.js', () => ({ default: prismaMock }));
 
-import { getAll, getById, create, remove } from '../src/controllers/orderController.js';
+import { getAll, getById, create, update, remove } from '../src/controllers/orderController.js';
 import { mockReq, mockRes, mockNext, MOCK_SUPPLIERS, MOCK_WAREHOUSES, MOCK_ITEMS } from './helpers/mockFactory.js';
 
 const MOCK_OPEN_STATUS = { order_status_id: 1, status_code: '10', status_name: 'Open' };
@@ -63,6 +63,57 @@ describe('Order Controller', () => {
     prismaMock.orderStatus.findFirst.mockResolvedValue(MOCK_OPEN_STATUS);
     prismaMock.orderDetail.deleteMany = vi.fn();
     prismaMock.order.delete = vi.fn();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // UPDATE
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('update', () => {
+    it('✅ updates editable order header fields', async () => {
+      prismaMock.order.findUnique.mockResolvedValueOnce({
+        order_id: 1n,
+        order_status: { status_code: '10', status_name: 'Open' },
+      });
+      prismaMock.orderStatus.findUnique.mockResolvedValue({ order_status_id: 2 });
+      prismaMock.order.update.mockResolvedValue({
+        order_id: 1n,
+        order_number: 'PO26060101',
+      });
+
+      const req = mockReq({
+        params: { id: '1' },
+        body: {
+          supplier_id: '1',
+          warehouse_id: '1',
+          delivery_start_date: '2026-06-02',
+          delivery_end_date: '2026-06-10',
+          approval_id: '1',
+          order_status_id: '2',
+        },
+        user: { user_id: 1, role_id: 1, role_code: 'ADMIN' },
+      });
+      const res = mockRes();
+
+      await update(req, res, mockNext());
+
+      expect(prismaMock.order.update).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('❌ blocks update for verified/cancelled order', async () => {
+      prismaMock.order.findUnique.mockResolvedValue({
+        order_id: 1n,
+        order_status: { status_code: '40', status_name: 'Verified' },
+      });
+
+      const req = mockReq({ params: { id: '1' }, body: { supplier_id: '1' } });
+      const res = mockRes();
+      await update(req, res, mockNext());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(prismaMock.order.update).not.toHaveBeenCalled();
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────

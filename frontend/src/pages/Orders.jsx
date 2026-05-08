@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getOrders, createOrder, deleteOrder, getSuppliers, getItems } from '../services/api';
+import { getOrders, createOrder, deleteOrder, getSuppliers, getItems, updateOrder, getOrderStatuses } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
 
 const STATUS_LABELS = {
@@ -172,6 +172,104 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
   );
 }
 
+function EditOrderModal({ order, onSubmit, onCancel, loading }) {
+  const [suppliers, setSuppliers] = useState([]);
+  const [statuses, setStatuses] = useState([]);
+  const [form, setForm] = useState({
+    warehouse_id: String(order?.warehouse_id || 1),
+    supplier_id: String(order?.supplier_id || ''),
+    delivery_start_date: order?.delivery_start_date ? new Date(order.delivery_start_date).toISOString().slice(0, 10) : '',
+    delivery_end_date: order?.delivery_end_date ? new Date(order.delivery_end_date).toISOString().slice(0, 10) : '',
+    approval_id: String(order?.approval_id || ''),
+    order_status_id: String(order?.order_status_id || ''),
+  });
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([getSuppliers({ limit: 100 }), getOrderStatuses()])
+      .then(([{ data: sData }, { data: stData }]) => {
+        setSuppliers(sData.data || []);
+        setStatuses(stData.data || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.supplier_id || !form.delivery_start_date || !form.delivery_end_date || !form.approval_id || !form.order_status_id) {
+      setError('Semua field wajib diisi.');
+      return;
+    }
+    if (new Date(form.delivery_end_date) < new Date(form.delivery_start_date)) {
+      setError('Delivery end date tidak boleh sebelum start date.');
+      return;
+    }
+    onSubmit(form);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <h2>Edit Order {order?.order_number}</h2>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form onSubmit={handleSubmit} className="form-grid">
+          <div className="form-group">
+            <label>Warehouse</label>
+            <select className="po-select" name="warehouse_id" value={form.warehouse_id} onChange={handleChange}>
+              <option value="1">WH01 - Gudang Utama Jakarta</option>
+              <option value="2">WH02 - Gudang Surabaya</option>
+              <option value="3">WH03 - Gudang Bandung</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Supplier</label>
+            <select className="po-select" name="supplier_id" value={form.supplier_id} onChange={handleChange}>
+              {suppliers.map((s) => (
+                <option key={s.supplier_id} value={String(s.supplier_id)}>
+                  {s.supplier_code} - {s.supplier_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Delivery Start</label>
+            <input type="date" name="delivery_start_date" value={form.delivery_start_date} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Delivery End</label>
+            <input type="date" name="delivery_end_date" value={form.delivery_end_date} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <select className="po-select" name="order_status_id" value={form.order_status_id} onChange={handleChange}>
+              {statuses.map((s) => (
+                <option key={s.order_status_id} value={String(s.order_status_id)}>
+                  {s.status_code} - {s.status_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Approval ID</label>
+            <input name="approval_id" value={form.approval_id} onChange={handleChange} />
+          </div>
+          <div className="form-actions span-full">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -184,6 +282,7 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
 
   // Stable reference for event handlers (button, onChange)
   const fetchOrders = useCallback(async () => {
@@ -234,6 +333,28 @@ export default function Orders() {
       fetchOrders();
     } catch (err) {
       flash(err.response?.data?.message || 'Gagal menghapus order.');
+    }
+  };
+
+  const handleUpdate = async (formData) => {
+    if (!editTarget) return;
+    setSubmitting(true);
+    try {
+      await updateOrder(editTarget.order_id, {
+        warehouse_id: String(formData.warehouse_id),
+        supplier_id: String(formData.supplier_id),
+        delivery_start_date: formData.delivery_start_date,
+        delivery_end_date: formData.delivery_end_date,
+        approval_id: String(formData.approval_id),
+        order_status_id: String(formData.order_status_id),
+      });
+      setEditTarget(null);
+      flash('Order berhasil diperbarui!', 'success');
+      fetchOrders();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Gagal memperbarui order.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -316,6 +437,7 @@ export default function Orders() {
                     <td>{formatDate(o.created_at)}</td>
                     {(role === 'ADMIN' || role === 'MANAGER') && (
                       <td className="cell-actions">
+                        <button className="btn-edit" title="Edit order" onClick={() => setEditTarget(o)}>Edit</button>
                         <button className="btn-icon btn-delete" title="Hapus order" onClick={() => setDeleteTarget(o)}>✕</button>
                       </td>
                     )}
@@ -331,6 +453,15 @@ export default function Orders() {
         <CreateOrderModal
           onSubmit={handleCreate}
           onCancel={() => setShowCreate(false)}
+          loading={submitting}
+        />
+      )}
+
+      {editTarget && (
+        <EditOrderModal
+          order={editTarget}
+          onSubmit={handleUpdate}
+          onCancel={() => setEditTarget(null)}
           loading={submitting}
         />
       )}

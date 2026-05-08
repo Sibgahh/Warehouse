@@ -348,6 +348,88 @@ export const getById = async (req, res, next) => {
 };
 
 /**
+ * PUT /api/orders/:id
+ * Update header order
+ */
+export const update = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const orderId = BigInt(id);
+    const { warehouse_id, supplier_id, delivery_start_date, delivery_end_date, approval_id, order_status_id } = req.body;
+
+    const existing = await prisma.order.findUnique({
+      where: { order_id: orderId },
+      select: { order_id: true, order_status: { select: { status_code: true, status_name: true } } },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order tidak ditemukan',
+      });
+    }
+
+    if (['40', '50'].includes(existing.order_status?.status_code)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order dengan status ${existing.order_status.status_name} tidak bisa diperbarui`,
+      });
+    }
+
+    if (delivery_start_date && delivery_end_date) {
+      const start = new Date(delivery_start_date);
+      const end = new Date(delivery_end_date);
+      if (end < start) {
+        return res.status(400).json({
+          success: false,
+          message: 'delivery_end_date tidak boleh sebelum delivery_start_date',
+        });
+      }
+    }
+
+    if (warehouse_id !== undefined) {
+      const warehouse = await prisma.warehouse.findUnique({ where: { warehouse_id: Number(warehouse_id) } });
+      if (!warehouse) return res.status(400).json({ success: false, message: `Warehouse dengan id ${warehouse_id} tidak ditemukan` });
+    }
+    if (supplier_id !== undefined) {
+      const supplier = await prisma.supplier.findUnique({ where: { supplier_id: BigInt(supplier_id) } });
+      if (!supplier) return res.status(400).json({ success: false, message: `Supplier dengan id ${supplier_id} tidak ditemukan` });
+    }
+    if (approval_id !== undefined) {
+      const approver = await prisma.user.findUnique({ where: { user_id: Number(approval_id) } });
+      if (!approver) return res.status(400).json({ success: false, message: `User approval dengan id ${approval_id} tidak ditemukan` });
+    }
+    if (order_status_id !== undefined) {
+      const status = await prisma.orderStatus.findUnique({ where: { order_status_id: Number(order_status_id) } });
+      if (!status) return res.status(400).json({ success: false, message: `Order status dengan id ${order_status_id} tidak ditemukan` });
+    }
+
+    const updated = await prisma.order.update({
+      where: { order_id: orderId },
+      data: {
+        ...(warehouse_id !== undefined && { warehouse_id: Number(warehouse_id) }),
+        ...(supplier_id !== undefined && { supplier_id: BigInt(supplier_id) }),
+        ...(delivery_start_date !== undefined && { delivery_start_date: new Date(delivery_start_date) }),
+        ...(delivery_end_date !== undefined && { delivery_end_date: new Date(delivery_end_date) }),
+        ...(approval_id !== undefined && { approval_id: Number(approval_id) }),
+        ...(order_status_id !== undefined && { order_status_id: Number(order_status_id) }),
+        last_updated_at: new Date(),
+        last_updated_id: req.user.user_id,
+      },
+      select: orderSelect,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Order berhasil diperbarui',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * DELETE /api/orders/:id
  * Hapus order beserta semua line item-nya
  */

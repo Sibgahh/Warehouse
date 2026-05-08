@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { register } from '../services/api';
 
 const ROLES = [
@@ -51,8 +51,7 @@ export default function Register() {
         password: form.password,
         role_id: parseInt(form.roleId),
       });
-      alert('Registrasi berhasil! Silakan login.');
-      navigate('/login');
+      alert('User berhasil ditambahkan!');
     } catch (err) {
       setError(
         err.response?.data?.message || 'Registrasi gagal. Coba lagi.'
@@ -65,9 +64,9 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Daftar</h1>
+        <h1>Manajemen User</h1>
         <p className="auth-subtitle">
-          Pembuatan user baru — hanya untuk{' '}
+          Tambah user baru — hanya untuk{' '}
           <span className="dev-badge">ADMIN</span>
         </p>
 
@@ -162,10 +161,6 @@ export default function Register() {
           </button>
         </form>
 
-        <div className="auth-footer">
-          <span>Sudah punya akun?</span>{' '}
-          <Link to="/login" className="auth-link">Masuk</Link>
-        </div>
       </div>
     </div>
   );

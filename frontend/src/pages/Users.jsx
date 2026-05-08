@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getUsers, deleteUser } from '../services/api';
+import { getUsers, updateUser, register } from '../services/api';
+import { decodeToken } from '../utils/token';
 
 const ROLE_LABELS = {
   1: 'Admin',
@@ -7,6 +8,9 @@ const ROLE_LABELS = {
 };
 
 export default function Users() {
+  const token = localStorage.getItem('token');
+  const currentUserId = decodeToken(token)?.user_id;
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -24,21 +28,19 @@ export default function Users() {
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    setFetchError('');
-    try {
-      const res = await getUsers();
-      setUsers(res.data.data);
-    } catch (err) {
-      setFetchError(err.response?.data?.message || 'Gagal memuat daftar user.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
+    useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setFetchError('');
+      try {
+        const res = await getUsers();
+        setUsers(res.data.data);
+      } catch (err) {
+        setFetchError(err.response?.data?.message || 'Gagal memuat daftar user.');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   // ─── Tambah User ────────────────────────────────────────────────────────────
@@ -61,30 +63,24 @@ export default function Users() {
     setSubmitting(true);
     setFormError('');
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          user_name: form.user_name.trim(),
-          full_name: form.full_name.trim(),
-          password: form.password,
-          role_id: form.role_id,
-        }),
+      await register({
+        user_name: form.user_name.trim(),
+        full_name: form.full_name.trim(),
+        password: form.password,
+        role_id: Number(form.role_id),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setFormError(data.message || 'Gagal menambah user.');
-        return;
-      }
+
       setFormSuccess('User berhasil ditambahkan!');
       setForm({ user_name: '', full_name: '', password: '', role_id: 2 });
       setShowForm(false);
-      fetchUsers();
-    } catch {
-      setFormError('Terjadi kesalahan. Coba lagi.');
+      setLoading(true);
+      getUsers()
+        .then((res) => setUsers(res.data.data))
+        .catch(() => setFetchError('Gagal menyegarkan daftar user.'))
+        .finally(() => setLoading(false));
+    } catch (err) {
+      const apiMessage = err.response?.data?.errors?.[0]?.message || err.response?.data?.message;
+      setFormError(apiMessage || 'Gagal menambah user.');
     } finally {
       setSubmitting(false);
     }
@@ -116,37 +112,20 @@ export default function Users() {
   const handleEditSubmit = async (userId) => {
     setEditError('');
     try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(editForm),
+      await updateUser(userId, {
+        ...editForm,
+        role_id: Number(editForm.role_id),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setEditError(data.message || 'Gagal memperbarui user.');
-        return;
-      }
+
       setEditSuccess('User berhasil diperbarui!');
       setEditingId(null);
-      fetchUsers();
-    } catch {
-      setEditError('Terjadi kesalahan. Coba lagi.');
-    }
-  };
-
-  // ─── Hapus User ─────────────────────────────────────────────────────────────
-  const handleDelete = async (userId, userName) => {
-    if (!confirm(`Hapus user "${userName}"?`)) return;
-    try {
-      const res = await deleteUser(userId);
-      if (res.data.success) {
-        fetchUsers();
-      }
+      setLoading(true);
+      getUsers()
+        .then((res) => setUsers(res.data.data))
+        .catch(() => setFetchError('Gagal menyegarkan daftar user.'))
+        .finally(() => setLoading(false));
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menghapus user.');
+      setEditError(err.response?.data?.message || 'Gagal memperbarui user.');
     }
   };
 
@@ -305,8 +284,11 @@ export default function Users() {
                         </span>
                       </td>
                       <td>
-                        <button className="btn-edit" onClick={() => startEdit(user)}>Edit</button>
-                        <button className="btn-delete" style={{ marginLeft: 8 }} onClick={() => handleDelete(user.user_id, user.user_name)}>Hapus</button>
+                        {Number(user.user_id) !== Number(currentUserId) ? (
+                          <button className="btn-edit" onClick={() => startEdit(user)}>Edit</button>
+                        ) : (
+                          <span style={{ color: '#888', fontSize: 12 }}>Akun sendiri</span>
+                        )}
                       </td>
                     </>
                   )}

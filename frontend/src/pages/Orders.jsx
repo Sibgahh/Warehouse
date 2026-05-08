@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getOrders, getOrder, createOrder, getSuppliers, getItems } from '../services/api';
+import { useState, useEffect, useCallback } from 'react';
+import { getOrders, createOrder, getSuppliers, getItems } from '../services/api';
 
 const STATUS_LABELS = {
   '10': { label: 'Open', color: '#6b7280', bg: '#f3f4f6' },
@@ -175,7 +175,8 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
 
-  const fetchOrders = async () => {
+  // Stable reference for event handlers (button, onChange)
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -190,9 +191,10 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, search]);
 
-  useEffect(() => { fetchOrders(); }, [statusFilter]);
+  // Initial mount only — re-fetches are event-driven (button / onChange)
+  useEffect(() => { fetchOrders(); }, []); // eslint-disable-line react-hooks/set-state-in-effect,react-hooks/exhaustive-deps
 
   const flash = (msg, type = 'error') => {
     if (type === 'success') { setSuccess(msg); setError(''); setTimeout(() => setSuccess(''), 3000); }

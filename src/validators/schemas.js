@@ -24,10 +24,27 @@ export const registerSchema = z.object({
     .string({ required_error: 'password wajib diisi' })
     .min(8, 'Password minimal 8 karakter')
     .max(100, 'Password maksimal 100 karakter'),
-  role_id: z
-    .string({ required_error: 'role_id wajib diisi' })
-    .transform((v) => Number(v))
-    .refine((v) => Number.isInteger(v) && v > 0, 'role_id harus angka positif'),
+  role_id: z.coerce
+    .number({ required_error: 'role_id wajib diisi', invalid_type_error: 'role_id harus angka positif' })
+    .int('role_id harus angka positif')
+    .positive('role_id harus angka positif'),
+});
+
+export const publicRegisterSchema = z.object({
+  user_name: z
+    .string({ required_error: 'user_name wajib diisi' })
+    .min(3, 'Username minimal 3 karakter')
+    .max(50, 'Username maksimal 50 karakter')
+    .regex(/^[a-zA-Z0-9_]+$/, 'Username hanya boleh huruf, angka, dan underscore'),
+  full_name: z
+    .string({ required_error: 'full_name wajib diisi' })
+    .min(2, 'Nama lengkap minimal 2 karakter')
+    .max(150, 'Nama lengkap maksimal 150 karakter')
+    .trim(),
+  password: z
+    .string({ required_error: 'password wajib diisi' })
+    .min(8, 'Password minimal 8 karakter')
+    .max(100, 'Password maksimal 100 karakter'),
 });
 
 // ─── Auth: Login ────────────────────────────────────────────────────────────
@@ -346,6 +363,247 @@ export const warehouseUpdateSchema = z.object({
     .optional()
     .or(z.literal('')),
   status: z.enum(['A', 'C']).optional(),
+});
+
+// ─── Store: Create/Update ─────────────────────────────────────────────────────
+export const storeCreateSchema = z.object({
+  store_code: z
+    .string({ required_error: 'store_code wajib diisi' })
+    .min(1, 'store_code tidak boleh kosong')
+    .max(5, 'store_code maksimal 5 karakter')
+    .trim(),
+  store_name: z
+    .string({ required_error: 'store_name wajib diisi' })
+    .min(1, 'store_name tidak boleh kosong')
+    .max(150, 'store_name maksimal 150 karakter')
+    .trim(),
+  email: z
+    .string()
+    .email('Format email tidak valid')
+    .max(150, 'email maksimal 150 karakter')
+    .optional()
+    .or(z.literal('')),
+  phone_number: z
+    .string()
+    .max(14, 'phone_number maksimal 14 karakter')
+    .trim()
+    .optional()
+    .or(z.literal('')),
+  city: z
+    .string()
+    .max(80, 'city maksimal 80 karakter')
+    .trim()
+    .optional()
+    .or(z.literal('')),
+  regency: z
+    .string()
+    .max(80, 'regency maksimal 80 karakter')
+    .trim()
+    .optional()
+    .or(z.literal('')),
+  address: z
+    .string()
+    .max(180, 'address maksimal 180 karakter')
+    .trim()
+    .optional()
+    .or(z.literal('')),
+  status: z.enum(['A', 'C']).optional().default('A'),
+});
+
+export const storeUpdateSchema = storeCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Minimal satu field harus diisi' }
+);
+
+// ─── Menu: Create/Update ──────────────────────────────────────────────────────
+export const menuCreateSchema = z.object({
+  menu_sequence: z
+    .string({ required_error: 'menu_sequence wajib diisi' })
+    .min(1, 'menu_sequence tidak boleh kosong')
+    .max(5, 'menu_sequence maksimal 5 karakter')
+    .trim(),
+  menu_name: z
+    .string({ required_error: 'menu_name wajib diisi' })
+    .min(1, 'menu_name tidak boleh kosong')
+    .max(80, 'menu_name maksimal 80 karakter')
+    .trim(),
+  menu_icon: z.string().max(150, 'menu_icon maksimal 150 karakter').optional().or(z.literal('')),
+  menu_link: z.string().max(150, 'menu_link maksimal 150 karakter').optional().or(z.literal('')),
+  is_submenu: z.boolean().optional().default(false),
+  is_active: z.boolean().optional().default(true),
+});
+
+export const menuUpdateSchema = menuCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Minimal satu field harus diisi' }
+);
+
+// ─── Submenu: Create/Update ───────────────────────────────────────────────────
+export const submenuCreateSchema = z.object({
+  menu_id: z.coerce
+    .number({ required_error: 'menu_id wajib diisi', invalid_type_error: 'menu_id harus angka positif' })
+    .int('menu_id harus angka positif')
+    .positive('menu_id harus angka positif'),
+  submenu_sequence: z
+    .string({ required_error: 'submenu_sequence wajib diisi' })
+    .min(1, 'submenu_sequence tidak boleh kosong')
+    .max(5, 'submenu_sequence maksimal 5 karakter')
+    .trim(),
+  submenu_name: z
+    .string({ required_error: 'submenu_name wajib diisi' })
+    .min(1, 'submenu_name tidak boleh kosong')
+    .max(80, 'submenu_name maksimal 80 karakter')
+    .trim(),
+  submenu_icon: z.string().max(150, 'submenu_icon maksimal 150 karakter').optional().or(z.literal('')),
+  submenu_link: z.string().max(150, 'submenu_link maksimal 150 karakter').optional().or(z.literal('')),
+  is_active: z.boolean().optional().default(true),
+});
+
+export const submenuUpdateSchema = submenuCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Minimal satu field harus diisi' }
+);
+
+// ─── Role Menu/Submenu: Create ────────────────────────────────────────────────
+export const roleMenuCreateSchema = z.object({
+  role_id: z.coerce
+    .number({ required_error: 'role_id wajib diisi', invalid_type_error: 'role_id harus angka positif' })
+    .int('role_id harus angka positif')
+    .positive('role_id harus angka positif'),
+  menu_id: z.coerce
+    .number({ required_error: 'menu_id wajib diisi', invalid_type_error: 'menu_id harus angka positif' })
+    .int('menu_id harus angka positif')
+    .positive('menu_id harus angka positif'),
+});
+
+export const roleSubmenuCreateSchema = z.object({
+  role_id: z.coerce
+    .number({ required_error: 'role_id wajib diisi', invalid_type_error: 'role_id harus angka positif' })
+    .int('role_id harus angka positif')
+    .positive('role_id harus angka positif'),
+  submenu_id: z.coerce
+    .number({ required_error: 'submenu_id wajib diisi', invalid_type_error: 'submenu_id harus angka positif' })
+    .int('submenu_id harus angka positif')
+    .positive('submenu_id harus angka positif'),
+});
+
+// ─── Order Status: Create/Update ─────────────────────────────────────────────
+export const orderStatusCreateSchema = z.object({
+  status_code: z
+    .string({ required_error: 'status_code wajib diisi' })
+    .min(1, 'status_code tidak boleh kosong')
+    .max(5, 'status_code maksimal 5 karakter')
+    .trim(),
+  status_name: z
+    .string({ required_error: 'status_name wajib diisi' })
+    .min(1, 'status_name tidak boleh kosong')
+    .max(100, 'status_name maksimal 100 karakter')
+    .trim(),
+});
+
+export const orderStatusUpdateSchema = orderStatusCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Minimal satu field harus diisi' }
+);
+
+// ─── Inventory: Create/Update ────────────────────────────────────────────────
+export const inventoryCreateSchema = z.object({
+  item_id: z.coerce
+    .number({ required_error: 'item_id wajib diisi', invalid_type_error: 'item_id harus angka positif' })
+    .int('item_id harus angka positif')
+    .positive('item_id harus angka positif')
+    .transform((v) => BigInt(v)),
+  on_hand_qty: z.coerce
+    .number({ required_error: 'on_hand_qty wajib diisi', invalid_type_error: 'on_hand_qty harus angka' })
+    .min(0, 'on_hand_qty tidak boleh negatif'),
+  on_ordered_qty: z.coerce
+    .number({ invalid_type_error: 'on_ordered_qty harus angka' })
+    .min(0, 'on_ordered_qty tidak boleh negatif')
+    .optional()
+    .default(0),
+});
+
+export const inventoryUpdateSchema = z.object({
+  on_hand_qty: z.coerce
+    .number({ invalid_type_error: 'on_hand_qty harus angka' })
+    .min(0, 'on_hand_qty tidak boleh negatif')
+    .optional(),
+  on_ordered_qty: z.coerce
+    .number({ invalid_type_error: 'on_ordered_qty harus angka' })
+    .min(0, 'on_ordered_qty tidak boleh negatif')
+    .optional(),
+}).refine((data) => data.on_hand_qty !== undefined || data.on_ordered_qty !== undefined, {
+  message: 'Minimal satu field qty harus diisi',
+});
+
+// ─── Roles: Create/Update ────────────────────────────────────────────────────
+export const roleCreateSchema = z.object({
+  role_code: z
+    .string({ required_error: 'role_code wajib diisi' })
+    .min(1, 'role_code tidak boleh kosong')
+    .max(8, 'role_code maksimal 8 karakter')
+    .trim(),
+  role_name: z
+    .string({ required_error: 'role_name wajib diisi' })
+    .min(1, 'role_name tidak boleh kosong')
+    .max(80, 'role_name maksimal 80 karakter')
+    .trim(),
+  is_active: z.boolean().optional().default(true),
+});
+
+export const roleUpdateSchema = roleCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Minimal satu field harus diisi' }
+);
+
+// ─── Order Details: Create/Update ────────────────────────────────────────────
+export const orderDetailCreateSchema = z.object({
+  order_id: z.coerce
+    .number({ required_error: 'order_id wajib diisi', invalid_type_error: 'order_id harus angka positif' })
+    .int('order_id harus angka positif')
+    .positive('order_id harus angka positif')
+    .transform((v) => BigInt(v)),
+  item_id: z.coerce
+    .number({ required_error: 'item_id wajib diisi', invalid_type_error: 'item_id harus angka positif' })
+    .int('item_id harus angka positif')
+    .positive('item_id harus angka positif')
+    .transform((v) => BigInt(v)),
+  qty_ordered: z.coerce
+    .number({ required_error: 'qty_ordered wajib diisi', invalid_type_error: 'qty_ordered harus angka' })
+    .gt(0, 'qty_ordered harus lebih dari 0'),
+  qty_received: z.coerce
+    .number({ invalid_type_error: 'qty_received harus angka' })
+    .min(0, 'qty_received tidak boleh negatif')
+    .optional(),
+  qty_cancelled: z.coerce
+    .number({ invalid_type_error: 'qty_cancelled harus angka' })
+    .min(0, 'qty_cancelled tidak boleh negatif')
+    .optional(),
+  reason_cancelled: z.string().max(150, 'reason_cancelled maksimal 150 karakter').optional().or(z.literal('')),
+});
+
+export const orderDetailUpdateSchema = z.object({
+  item_id: z.coerce
+    .number({ invalid_type_error: 'item_id harus angka positif' })
+    .int('item_id harus angka positif')
+    .positive('item_id harus angka positif')
+    .transform((v) => BigInt(v))
+    .optional(),
+  qty_ordered: z.coerce
+    .number({ invalid_type_error: 'qty_ordered harus angka' })
+    .gt(0, 'qty_ordered harus lebih dari 0')
+    .optional(),
+  qty_received: z.coerce
+    .number({ invalid_type_error: 'qty_received harus angka' })
+    .min(0, 'qty_received tidak boleh negatif')
+    .optional(),
+  qty_cancelled: z.coerce
+    .number({ invalid_type_error: 'qty_cancelled harus angka' })
+    .min(0, 'qty_cancelled tidak boleh negatif')
+    .optional(),
+  reason_cancelled: z.string().max(150, 'reason_cancelled maksimal 150 karakter').optional().or(z.literal('')),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'Minimal satu field harus diisi',
 });
 
 // ─── Helper: parse with error formatting ─────────────────────────────────────

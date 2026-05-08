@@ -90,8 +90,13 @@ export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { full_name, role_id, is_active } = req.body;
+    const targetUserId = Number(id);
 
-    const existing = await prisma.user.findUnique({ where: { user_id: Number(id) } });
+    if (targetUserId === req.user.user_id) {
+      return res.status(400).json({ success: false, message: 'Tidak bisa mengubah akun sendiri' });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { user_id: targetUserId } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     }
@@ -105,7 +110,7 @@ export const update = async (req, res, next) => {
 
     if (req.body.user_name && req.body.user_name !== existing.user_name) {
       const dup = await prisma.user.findFirst({
-        where: { user_name: req.body.user_name, user_id: { not: Number(id) } },
+        where: { user_name: req.body.user_name, user_id: { not: targetUserId } },
       });
       if (dup) {
         return res.status(409).json({ success: false, message: 'Username sudah terdaftar' });
@@ -113,7 +118,7 @@ export const update = async (req, res, next) => {
     }
 
     const user = await prisma.user.update({
-      where: { user_id: Number(id) },
+      where: { user_id: targetUserId },
       data: {
         ...(full_name !== undefined && { full_name }),
         ...(role_id !== undefined && { role_id: Number(role_id) }),
@@ -149,42 +154,19 @@ export const remove = async (req, res, next) => {
     }
 
     if (existing.user_id === req.user.user_id) {
-      return res.status(400).json({ success: false, message: 'Tidak bisa menghapus akun sendiri' });
+      return res.status(400).json({ success: false, message: 'Tidak bisa menonaktifkan akun sendiri' });
     }
 
-    // Cek apakah user punya activity sebagai creator/approver/receiver di order atau order_detail
-    const [
-      ordersAsCreator,
-      ordersAsApprover,
-      ordersAsUpdater,
-      ordersAsVerifier,
-      detailsAsCreator,
-      detailsAsReceiver,
-    ] = await Promise.all([
-      prisma.order.count({ where: { created_id: numId } }),
-      prisma.order.count({ where: { approval_id: numId } }),
-      prisma.order.count({ where: { last_updated_id: numId } }),
-      prisma.order.count({ where: { verified_id: numId } }),
-      prisma.orderDetail.count({ where: { created_id: numId } }),
-      prisma.orderDetail.count({ where: { received_id: numId } }),
-    ]);
+    // Soft delete: set is_active = false (bukan hard delete)
+    // Ini aman karena tidak melanggar FK constraint dan data audit/order tetap utuh
+    await prisma.user.update({
+      where: { user_id: numId },
+      data: { is_active: false },
+    });
 
-    const totalActivity =
-      ordersAsCreator + ordersAsApprover + ordersAsUpdater + ordersAsVerifier +
-      detailsAsCreator + detailsAsReceiver;
+    console.log(`[USER] Deactivated: ${existing.user_name} by user_id:${req.user.user_id}`);
 
-    if (totalActivity > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `User sudah terkait dengan ${totalActivity} data activity dan tidak bisa dihapus`,
-      });
-    }
-
-    await prisma.user.delete({ where: { user_id: numId } });
-
-    console.log(`[USER] Deleted: ${existing.user_name} by user_id:${req.user.user_id}`);
-
-    res.status(200).json({ success: true, message: 'User berhasil dihapus' });
+    res.status(200).json({ success: true, message: 'User berhasil dinonaktifkan' });
   } catch (error) {
     next(error);
   }

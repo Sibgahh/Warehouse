@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getItems, createItem, updateItem, deleteItem, getSuppliers } from '../services/api';
+import ModalDialog from '../components/ModalDialog';
 
 const STATUS_OPTIONS = [
   { value: 'A', label: 'Active' },
@@ -7,6 +8,14 @@ const STATUS_OPTIONS = [
   { value: 'C', label: 'Closed' },
 ];
 const STATUS_COLORS = { A: '#16a34a', I: '#d97706', C: '#6b7280' };
+const NUMERIC_FIELDS = new Set([
+  'std_qty',
+  'min_stock',
+  'max_stock',
+  'unit_cost',
+  'unit_retail',
+]);
+const NUMERIC_PATTERN = /^\d*\.?\d*$/;
 
 function fmt(n) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
@@ -30,21 +39,41 @@ function ItemForm({ initial, onSubmit, onCancel, loading }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let ignore = false;
     getSuppliers({ limit: 100 })
       .then(({ data }) => {
-        const list = data.data || [];
-        setSuppliers(list);
-        if (!form.supplier_id && list.length > 0) {
-          setForm((f) => ({ ...f, supplier_id: String(list[0].supplier_id) }));
+        if (!ignore) {
+          const list = data.data || [];
+          setSuppliers(list);
+          if (!form.supplier_id && list.length > 0) {
+            setForm((f) => ({ ...f, supplier_id: String(list[0].supplier_id) }));
+          }
         }
       })
       .catch(() => {});
-  }, []);
+    return () => { ignore = true; };
+  }, [form.supplier_id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (NUMERIC_FIELDS.has(name)) {
+      if (value.includes(',')) {
+        setError('Gunakan titik (.) untuk desimal, bukan koma (,).');
+        return;
+      }
+      if (!NUMERIC_PATTERN.test(value)) {
+        setError('Field numerik hanya boleh berisi angka.');
+        return;
+      }
+    }
     setForm((f) => ({ ...f, [name]: value }));
     setError('');
+  };
+
+  const handleNumericKeyDown = (e) => {
+    if ([',', 'e', 'E', '+', '-'].includes(e.key)) {
+      e.preventDefault();
+    }
   };
 
   const handleSubmit = (e) => {
@@ -52,24 +81,34 @@ function ItemForm({ initial, onSubmit, onCancel, loading }) {
     if (!form.item_name.trim()) { setError('Nama item wajib diisi.'); return; }
     if (form.item_name.length > 12) { setError('Nama item maksimal 12 karakter.'); return; }
     if (!form.description.trim()) { setError('Deskripsi wajib diisi.'); return; }
-        if (form.std_qty == null || form.max_stock == null || form.unit_cost == null || form.unit_retail == null) {
+    if (
+      !String(form.std_qty).trim() ||
+      !String(form.max_stock).trim() ||
+      !String(form.unit_cost).trim() ||
+      !String(form.unit_retail).trim()
+    ) {
       setError('Semua field numerik wajib diisi.'); return;
     }
     const std_qty = Number(form.std_qty);
     const max_stock = Number(form.max_stock);
     const unit_cost = Number(form.unit_cost);
     const unit_retail = Number(form.unit_retail);
-    if (isNaN(std_qty) || isNaN(max_stock) || isNaN(unit_cost) || isNaN(unit_retail)) {
+    const min_stock = form.min_stock === '' ? 0 : Number(form.min_stock);
+    if (isNaN(std_qty) || isNaN(max_stock) || isNaN(unit_cost) || isNaN(unit_retail) || isNaN(min_stock)) {
       setError('Semua field numerik wajib diisi.'); return;
     }
+    if (!String(form.supplier_id).trim()) { setError('Supplier wajib dipilih.'); return; }
     onSubmit({
       ...form,
-      std_qty,
-      min_stock: Number(form.min_stock) || 0,
-      max_stock,
-      unit_cost,
-      unit_retail,
-      supplier_id: form.supplier_id,
+      item_name: form.item_name.trim(),
+      description: form.description.trim(),
+      // Backend Zod schema expects strings, then transforms there.
+      std_qty: String(form.std_qty).trim(),
+      min_stock: String(form.min_stock === '' ? 0 : form.min_stock).trim(),
+      max_stock: String(form.max_stock).trim(),
+      unit_cost: String(form.unit_cost).trim(),
+      unit_retail: String(form.unit_retail).trim(),
+      supplier_id: String(form.supplier_id).trim(),
     });
   };
 
@@ -98,23 +137,63 @@ function ItemForm({ initial, onSubmit, onCancel, loading }) {
             </div>
             <div className="form-group">
               <label>Std Qty</label>
-              <input name="std_qty" type="number" step="0.01" value={form.std_qty} onChange={handleChange} disabled={loading} />
+              <input
+                name="std_qty"
+                type="text"
+                inputMode="decimal"
+                value={form.std_qty}
+                onChange={handleChange}
+                onKeyDown={handleNumericKeyDown}
+                disabled={loading}
+              />
             </div>
             <div className="form-group">
               <label>Min Stock</label>
-              <input name="min_stock" type="number" step="0.01" value={form.min_stock} onChange={handleChange} disabled={loading} />
+              <input
+                name="min_stock"
+                type="text"
+                inputMode="decimal"
+                value={form.min_stock}
+                onChange={handleChange}
+                onKeyDown={handleNumericKeyDown}
+                disabled={loading}
+              />
             </div>
             <div className="form-group">
               <label>Max Stock *</label>
-              <input name="max_stock" type="number" step="0.01" value={form.max_stock} onChange={handleChange} disabled={loading} />
+              <input
+                name="max_stock"
+                type="text"
+                inputMode="decimal"
+                value={form.max_stock}
+                onChange={handleChange}
+                onKeyDown={handleNumericKeyDown}
+                disabled={loading}
+              />
             </div>
             <div className="form-group">
               <label>Harga Beli (Cost) *</label>
-              <input name="unit_cost" type="number" step="1" value={form.unit_cost} onChange={handleChange} disabled={loading} />
+              <input
+                name="unit_cost"
+                type="text"
+                inputMode="numeric"
+                value={form.unit_cost}
+                onChange={handleChange}
+                onKeyDown={handleNumericKeyDown}
+                disabled={loading}
+              />
             </div>
             <div className="form-group">
               <label>Harga Jual (Retail) *</label>
-              <input name="unit_retail" type="number" step="1" value={form.unit_retail} onChange={handleChange} disabled={loading} />
+              <input
+                name="unit_retail"
+                type="text"
+                inputMode="numeric"
+                value={form.unit_retail}
+                onChange={handleChange}
+                onKeyDown={handleNumericKeyDown}
+                disabled={loading}
+              />
             </div>
             <div className="form-group span-full">
               <label>Supplier *</label>
@@ -143,11 +222,12 @@ export default function Items() {
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [total, setTotal] = useState(0);
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const { data } = await getItems({
@@ -161,9 +241,10 @@ export default function Items() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, statusFilter]);
 
-  useEffect(() => { fetchItems(); }, [statusFilter]);
+  // fetchItems used as event-handler too (onKeyDown, button), so keep stable via useCallback
+  useEffect(() => { fetchItems(); }, [fetchItems]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const flash = (msg, type = 'error') => {
     if (type === 'success') { setSuccess(msg); setError(''); setTimeout(() => setSuccess(''), 3000); }
@@ -203,13 +284,19 @@ export default function Items() {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Hapus item "${item.item_name}"?`)) return;
+    setDeleteTarget(item);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteItem(item.item_id);
+      await deleteItem(deleteTarget.item_id);
       flash('Item berhasil dihapus.', 'success');
       fetchItems();
     } catch (err) {
       flash(err.response?.data?.message || 'Gagal menghapus item.');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -319,6 +406,16 @@ export default function Items() {
           loading={submitting}
         />
       )}
+      <ModalDialog
+        open={Boolean(deleteTarget)}
+        title="Hapus Item"
+        message={`Yakin ingin menghapus item "${deleteTarget?.item_name}"?`}
+        showCancel={true}
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

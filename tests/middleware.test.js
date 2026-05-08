@@ -11,6 +11,7 @@ const { prismaMock } = vi.hoisted(() => {
   return {
     prismaMock: {
       role: { findUnique: vi.fn() },
+      user: { findUnique: vi.fn() },
     },
   };
 });
@@ -141,6 +142,10 @@ describe('checkRole middleware', () => {
     const res = mockRes();
     const next = mockNext();
 
+    prismaMock.user.findUnique.mockResolvedValue({
+      role: { role_code: 'STAFF', role_name: 'Staff' },
+    });
+
     await checkRole(['ADMIN', 'MANAGER'])(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
@@ -163,13 +168,19 @@ describe('checkRole middleware', () => {
     const res = mockRes();
     const next = mockNext();
 
-    prismaMock.role.findUnique.mockResolvedValue(MOCK_ROLES.ADMIN);
+    prismaMock.user.findUnique.mockResolvedValue({
+      role: { role_code: MOCK_ROLES.ADMIN.role_code, role_name: MOCK_ROLES.ADMIN.role_name },
+    });
 
     await checkRole(['ADMIN'])(req, res, next);
 
-    expect(prismaMock.role.findUnique).toHaveBeenCalledWith({
-      where: { role_id: 1 },
-      select: { role_code: true, role_name: true },
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { user_id: 1 },
+      select: {
+        role: {
+          select: { role_code: true, role_name: true },
+        },
+      },
     });
     expect(next).toHaveBeenCalled();
   });
@@ -179,7 +190,7 @@ describe('checkRole middleware', () => {
     const res = mockRes();
     const next = mockNext();
 
-    prismaMock.role.findUnique.mockResolvedValue(null);
+    prismaMock.user.findUnique.mockResolvedValue(null);
 
     await checkRole(['ADMIN'])(req, res, next);
 

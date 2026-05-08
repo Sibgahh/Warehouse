@@ -38,5 +38,20 @@ export function getRoleFromToken() {
  * @returns {boolean}
  */
 export function isAuthenticated() {
-  return !!localStorage.getItem('token');
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  return !isTokenExpired(token);
+}
+
+/**
+ * Cek apakah JWT sudah expired berdasarkan field `exp` di payload.
+ *
+ * @param {string} token - JWT string
+ * @returns {boolean} true kalau expired atau invalid, false kalau masih berlaku
+ */
+export function isTokenExpired(token) {
+  const payload = decodeToken(token);
+  if (!payload || !payload.exp) return true;
+  // exp adalah Unix timestamp dalam detik; Date.now() dalam milidetik
+  return Date.now() >= payload.exp * 1000;
 }

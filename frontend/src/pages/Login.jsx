@@ -41,6 +41,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
+        <div className="auth-brand">Warehouse Hypermart</div>
         <h1>Masuk</h1>
         <p className="auth-subtitle">Silakan masukkan kredensial Anda</p>
 

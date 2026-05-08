@@ -22,39 +22,38 @@ const checkRole = (allowedRoles) => {
         });
       }
 
+      const allowed = allowedRoles.map((r) => r.toLowerCase());
+
       // ─── Cek role dari JWT payload (tanpa DB query) ───
       const roleCodeFromToken = req.user.role_code;
-
       if (roleCodeFromToken) {
-        // Fast path: cek langsung dari token, zero DB query
-        const allowed = allowedRoles.map((r) => r.toLowerCase());
         const roleCode = roleCodeFromToken.toLowerCase();
-
-        if (!allowed.includes(roleCode)) {
-          console.log(
-            `[AUTH] Access denied for user_id: ${req.user.user_id}, role: ${roleCode}, required: [${allowedRoles.join(', ')}]`
-          );
-
-          return res.status(403).json({
-            success: false,
-            message: `Akses ditolak. Role '${roleCodeFromToken}' tidak memiliki izin untuk akses ini.`,
-          });
+        if (allowed.includes(roleCode)) {
+          req.user.role_name = roleCodeFromToken;
+          return next();
         }
 
-        req.user.role_name = roleCodeFromToken; // Tempkan ke req untuk konsistensi
-        return next();
+        // Role pada token bisa stale setelah perubahan role user.
+        // Verifikasi ulang ke DB agar akses mengikuti role terbaru.
+        console.warn(
+          `[AUTH] Role mismatch token for user_id:${req.user.user_id}, token_role:${roleCodeFromToken} — checking latest role from DB`
+        );
+      } else {
+        console.warn(
+          `[AUTH] Legacy token detected for user_id:${req.user.user_id} — falling back to DB lookup`
+        );
       }
 
-      // ─── Fallback: legacy token tanpa role_code, ambil dari DB ───
-      console.warn(
-        `[AUTH] Legacy token detected for user_id: ${req.user.user_id} — falling back to DB lookup`
-      );
-
-      const role = await prisma.role.findUnique({
-        where: { role_id: req.user.role_id },
-        select: { role_code: true, role_name: true },
+      // ─── Fallback: ambil role terbaru dari DB ───
+      const userWithRole = await prisma.user.findUnique({
+        where: { user_id: req.user.user_id },
+        select: {
+          role: {
+            select: { role_code: true, role_name: true },
+          },
+        },
       });
-
+      const role = userWithRole?.role;
       if (!role) {
         return res.status(403).json({
           success: false,
@@ -63,7 +62,6 @@ const checkRole = (allowedRoles) => {
       }
 
       const roleCode = role.role_code.toLowerCase();
-      const allowed = allowedRoles.map((r) => r.toLowerCase());
 
       if (!allowed.includes(roleCode)) {
         console.log(

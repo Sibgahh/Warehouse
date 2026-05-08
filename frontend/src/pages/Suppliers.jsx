@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getSuppliers,
   createSupplier,
   updateSupplier,
   deleteSupplier,
 } from '../services/api';
+import ModalDialog from '../components/ModalDialog';
 
 // ── Generate supplier code ─────────────────────────────────────────────────────
 function generateSupplierCode() {
@@ -170,9 +171,10 @@ export default function Suppliers() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [search, setSearch] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -183,11 +185,9 @@ export default function Suppliers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
-  useEffect(() => {
-    fetchSuppliers();
-  }, []);
+  useEffect(() => { fetchSuppliers(); }, []); // eslint-disable-line react-hooks/set-state-in-effect,react-hooks/exhaustive-deps
 
   // ── Flash message helper ───────────────────────────────────────────────────
   const flash = (msg, type = 'error') => {
@@ -230,13 +230,19 @@ export default function Suppliers() {
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = async (supplier) => {
-    if (!window.confirm(`Hapus supplier "${supplier.supplier_name}"?`)) return;
+    setDeleteTarget(supplier);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteSupplier(supplier.supplier_id);
+      await deleteSupplier(deleteTarget.supplier_id);
       flash('Supplier berhasil dihapus.', 'success');
       fetchSuppliers();
     } catch (err) {
       flash(err.response?.data?.message || 'Gagal menghapus supplier.');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -364,6 +370,16 @@ export default function Suppliers() {
           loading={submitting}
         />
       )}
+      <ModalDialog
+        open={Boolean(deleteTarget)}
+        title="Hapus Supplier"
+        message={`Yakin ingin menghapus supplier "${deleteTarget?.supplier_name}"?`}
+        showCancel={true}
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

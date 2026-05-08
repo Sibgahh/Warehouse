@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { register } from '../services/api';
-
-const ROLES = [
-  { value: '2', label: 'Staff' },
-];
+import { Link, useNavigate } from 'react-router-dom';
+import { registerPublic } from '../services/api';
+import ModalDialog from '../components/ModalDialog';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -14,10 +11,10 @@ export default function Register() {
     fullName: '',
     password: '',
     confirmPassword: '',
-    roleId: '2', // Default ke Staff — ADMIN cuma dipilih oleh admin
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -45,16 +42,16 @@ export default function Register() {
     setError('');
 
     try {
-      await register({
+      await registerPublic({
         user_name: form.username.trim(),
         full_name: form.fullName.trim(),
         password: form.password,
-        role_id: parseInt(form.roleId),
       });
-      alert('User berhasil ditambahkan!');
+      setShowSuccessModal(true);
     } catch (err) {
+      const apiMessage = err.response?.data?.errors?.[0]?.message || err.response?.data?.message;
       setError(
-        err.response?.data?.message || 'Registrasi gagal. Coba lagi.'
+        apiMessage || 'Registrasi gagal. Coba lagi.'
       );
     } finally {
       setLoading(false);
@@ -64,10 +61,10 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Manajemen User</h1>
+        <div className="auth-brand">Warehouse Hypermart</div>
+        <h1>Daftar</h1>
         <p className="auth-subtitle">
-          Tambah user baru — hanya untuk{' '}
-          <span className="dev-badge">ADMIN</span>
+          Daftar akun baru (otomatis role Staff)
         </p>
 
         {error && (
@@ -132,23 +129,6 @@ export default function Register() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="roleId">Role</label>
-            <select
-              id="roleId"
-              name="roleId"
-              value={form.roleId}
-              onChange={handleChange}
-              disabled={loading}
-            >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? (
               <>
@@ -161,7 +141,23 @@ export default function Register() {
           </button>
         </form>
 
+        <div className="auth-footer">
+          <span>Sudah punya akun?</span>{' '}
+          <Link to="/login" className="auth-link">Login</Link>
+        </div>
+
       </div>
+      <ModalDialog
+        open={showSuccessModal}
+        title="Registrasi Berhasil"
+        message="Akun berhasil dibuat. Silakan login."
+        confirmText="Ke Login"
+        onConfirm={() => {
+          setShowSuccessModal(false);
+          navigate('/login');
+        }}
+        onCancel={() => setShowSuccessModal(false)}
+      />
     </div>
   );
 }

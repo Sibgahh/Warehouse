@@ -5,20 +5,18 @@ export default function Warehouses() {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchWarehouses = async () => {
-    setLoading(true);
-    try {
-      const res = await getWarehouses();
-      setWarehouses(res.data.data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchWarehouses();
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await getWarehouses();
+        setWarehouses(res.data.data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   return (

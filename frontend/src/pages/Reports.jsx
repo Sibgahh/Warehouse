@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { getReportOrdersPerSupplier, getReportQtyPerItem } from '../services/api';
+import ModalDialog from '../components/ModalDialog';
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('suppliers');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dates, setDates] = useState({ start_date: '', end_date: '' });
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = activeTab === 'suppliers' 
+      const res = activeTab === 'suppliers'
         ? await getReportOrdersPerSupplier(dates)
         : await getReportQtyPerItem(dates);
       setData(res.data.data || []);
@@ -20,10 +22,13 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, dates]);
 
   const handleExport = () => {
-    if (data.length === 0) return alert('Tidak ada data untuk di-export');
+    if (data.length === 0) {
+      setShowInfoModal(true);
+      return;
+    }
     
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -33,7 +38,7 @@ export default function Reports() {
     XLSX.writeFile(wb, fileName);
   };
 
-  useEffect(() => { fetchData(); }, [activeTab]);
+  useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/set-state-in-effect,react-hooks/exhaustive-deps
 
   return (
     <div className="page">
@@ -141,6 +146,14 @@ export default function Reports() {
           </div>
         )}
       </div>
+      <ModalDialog
+        open={showInfoModal}
+        title="Export Laporan"
+        message="Tidak ada data untuk di-export."
+        confirmText="OK"
+        onConfirm={() => setShowInfoModal(false)}
+        onCancel={() => setShowInfoModal(false)}
+      />
     </div>
   );
 }

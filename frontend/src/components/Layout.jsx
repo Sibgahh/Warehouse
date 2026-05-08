@@ -80,7 +80,7 @@ export default function Layout() {
           {role === 'ADMIN' && (
             <div className="nav-group">
               <label>Admin</label>
-              <NavItem to="/register" icon={IconSupplier} label="Manajemen User" />
+              <NavItem to="/users" icon={IconSupplier} label="Manajemen User" />
             </div>
           )}
 

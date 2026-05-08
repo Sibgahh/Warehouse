@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /**
  * Rate limiter untuk endpoint autentikasi.
@@ -17,11 +17,8 @@ export const loginLimiter = rateLimit({
   standardHeaders: true,      // kirim RateLimit-* headers
   legacyHeaders: false,
 
-  // Skip jika IP adalah trusted (misal: internal network / localhost)
-  skip: (req) => {
-    const trusted = ['::ffff:127.0.0.1', '::1', '127.0.0.1'];
-    return trusted.includes(req.ip);
-  },
+  // Key generator resmi express-rate-limit (tangani IPv6 dengan benar)
+  keyGenerator: ipKeyGenerator,
 
   // Custom response saat limit exceeded
   message: {
@@ -29,10 +26,6 @@ export const loginLimiter = rateLimit({
     message: 'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.',
     retryAfter: '15 menit',
   },
-
-  // Key berdasarkan IP saja (tidak kombinasi IP + user_name
-  // supaya brute-force per username tetap terdeteksi per IP)
-  keyGenerator: (req) => req.ip,
 });
 
 export const registerLimiter = rateLimit({
@@ -41,16 +34,11 @@ export const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 
-  skip: (req) => {
-    const trusted = ['::ffff:127.0.0.1', '::1', '127.0.0.1'];
-    return trusted.includes(req.ip);
-  },
+  keyGenerator: ipKeyGenerator,
 
   message: {
     success: false,
     message: 'Terlalu banyak percobaan registrasi. Hubungi admin jika ini kesalahan.',
     retryAfter: '15 menit',
   },
-
-  keyGenerator: (req) => req.ip,
 });

@@ -3,7 +3,7 @@ import * as warehouseController from '../controllers/warehouseController.js';
 import verifyToken from '../middlewares/verifyToken.js';
 import checkRole from '../middlewares/checkRole.js';
 import { validate } from '../middlewares/validate.js';
-import { warehouseCreateSchema } from '../validators/schemas.js';
+import { warehouseCreateSchema, warehouseUpdateSchema } from '../validators/schemas.js';
 
 const router = Router();
 
@@ -18,5 +18,8 @@ const router = Router();
 
 router.get('/', verifyToken, checkRole(['ADMIN', 'MANAGER']), warehouseController.getAll);
 router.post('/', verifyToken, checkRole(['ADMIN', 'MANAGER']), validate(warehouseCreateSchema), warehouseController.create);
+router.get('/:id', verifyToken, checkRole(['ADMIN', 'MANAGER']), warehouseController.getById);
+router.put('/:id', verifyToken, checkRole(['ADMIN', 'MANAGER']), validate(warehouseUpdateSchema), warehouseController.update);
+router.delete('/:id', verifyToken, checkRole(['ADMIN', 'MANAGER']), warehouseController.remove);
 
 export default router;

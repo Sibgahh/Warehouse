@@ -31,6 +31,8 @@ app.use(
   })
 );
 
+app.set('trust proxy', 1); // supaya req.ip terbaca benar di localhost
+
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

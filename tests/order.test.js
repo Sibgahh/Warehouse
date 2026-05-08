@@ -28,7 +28,7 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock('../src/config/prisma.js', () => ({ default: prismaMock }));
 
-import { getAll, getById, create } from '../src/controllers/orderController.js';
+import { getAll, getById, create, remove } from '../src/controllers/orderController.js';
 import { mockReq, mockRes, mockNext, MOCK_SUPPLIERS, MOCK_WAREHOUSES, MOCK_ITEMS } from './helpers/mockFactory.js';
 
 const MOCK_OPEN_STATUS = { order_status_id: 1, status_code: '10', status_name: 'Open' };
@@ -61,6 +61,8 @@ describe('Order Controller', () => {
     prismaMock.user.findUnique.mockResolvedValue(MOCK_APPROVER);
     prismaMock.item.findMany.mockResolvedValue(MOCK_ITEMS.map((i) => ({ ...i, status: 'A' })));
     prismaMock.orderStatus.findFirst.mockResolvedValue(MOCK_OPEN_STATUS);
+    prismaMock.orderDetail.deleteMany = vi.fn();
+    prismaMock.order.delete = vi.fn();
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -277,6 +279,44 @@ describe('Order Controller', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[ORDER] Created:'));
       consoleSpy.mockRestore();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('remove', () => {
+    it('✅ deletes order and order_details in transaction', async () => {
+      prismaMock.order.findUnique.mockResolvedValue({
+        order_id: 1n,
+        order_number: 'PO26060101',
+        order_status: { status_code: '10', status_name: 'Open' },
+        _count: { order_details: 2 },
+      });
+      prismaMock.orderDetail.deleteMany.mockResolvedValue({ count: 2 });
+      prismaMock.order.delete.mockResolvedValue({ order_id: 1n });
+
+      const req = mockReq({ params: { id: '1' } });
+      const res = mockRes();
+      await remove(req, res, mockNext());
+
+      expect(prismaMock.orderDetail.deleteMany).toHaveBeenCalledWith({ where: { order_id: 1n } });
+      expect(prismaMock.order.delete).toHaveBeenCalledWith({ where: { order_id: 1n } });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('❌ returns 400 for verified/cancelled order', async () => {
+      prismaMock.order.findUnique.mockResolvedValue({
+        order_id: 2n,
+        order_number: 'PO26060102',
+        order_status: { status_code: '40', status_name: 'Verified' },
+        _count: { order_details: 1 },
+      });
+
+      const res = mockRes();
+      await remove(mockReq({ params: { id: '2' } }), res, mockNext());
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(prismaMock.order.delete).not.toHaveBeenCalled();
     });
   });
 });

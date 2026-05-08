@@ -70,6 +70,7 @@ export const deleteItem = (id) => api.delete(`/api/items/${id}`);
 export const getOrders = (params) => api.get('/api/orders', { params });
 export const getOrder = (id) => api.get(`/api/orders/${id}`);
 export const createOrder = (data) => api.post('/api/orders', data);
+export const deleteOrder = (id) => api.delete(`/api/orders/${id}`);
 export const getOrderDetails = (params) => api.get('/api/order-details', { params });
 export const createOrderDetail = (data) => api.post('/api/order-details', data);
 export const updateOrderDetail = (id, data) => api.put(`/api/order-details/${id}`, data);

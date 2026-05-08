@@ -15,8 +15,8 @@ export default function ModalDialog({
     <div className="modal-overlay" onClick={loading ? undefined : onCancel}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
-        <p style={{ marginTop: 8, color: 'var(--text-muted)' }}>{message}</p>
-        <div className="form-actions" style={{ marginTop: 20 }}>
+        <p className="modal-message">{message}</p>
+        <div className="form-actions modal-actions">
           {showCancel && (
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={loading}>
               {cancelText}

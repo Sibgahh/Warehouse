@@ -80,7 +80,7 @@ export const create = async (req, res, next) => {
     if (duplicate) return res.status(409).json({ success: false, message: 'Item ini sudah ada di order tersebut' });
 
     const data = await prisma.$transaction(async (tx) => {
-      const [{ 'MAX(order_detail_id)': maxId }] = await tx.$queryRaw`
+      const [{ max_order_detail_id: maxId }] = await tx.$queryRaw`
         SELECT MAX(order_detail_id) AS \`max_order_detail_id\`
         FROM order_details
         FOR UPDATE

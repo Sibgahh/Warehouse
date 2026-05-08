@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getOrders, createOrder, getSuppliers, getItems } from '../services/api';
+import { getOrders, createOrder, deleteOrder, getSuppliers, getItems } from '../services/api';
+import ModalDialog from '../components/ModalDialog';
 
 const STATUS_LABELS = {
   '10': { label: 'Open', color: '#6b7280', bg: '#f3f4f6' },
@@ -32,20 +33,26 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
     supplier_id: '',
     delivery_start_date: '',
     delivery_end_date: '',
-    approval_id: '4',
+    approval_id: '',
   });
   const [orderItems, setOrderItems] = useState([{ item_id: '', qty_ordered: '' }]);
   const [error, setError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
+  const activeItems = items.filter((it) => it.status === 'A');
 
   useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+
     Promise.all([getSuppliers({ limit: 100 }), getItems({ limit: 100 })])
       .then(([{ data: sData }, { data: iData }]) => {
         setSuppliers(sData.data || []);
         setItems(iData.data || []);
-        if (sData.data?.length > 0) {
-          setForm((f) => ({ ...f, supplier_id: String(sData.data[0].supplier_id) }));
-        }
+        setForm((f) => ({
+          ...f,
+          supplier_id: sData.data?.length > 0 ? String(sData.data[0].supplier_id) : '',
+          approval_id: currentUser?.user_id ? String(currentUser.user_id) : '',
+        }));
       })
       .catch(() => {})
       .finally(() => setLoadingData(false));
@@ -69,13 +76,14 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const validItems = orderItems.filter((r) => r.item_id && r.qty_ordered > 0);
-    if (!form.supplier_id || !form.delivery_start_date || !form.delivery_end_date) {
+    const activeItemIds = new Set(activeItems.map((it) => String(it.item_id)));
+    const validItems = orderItems.filter((r) => r.item_id && r.qty_ordered > 0 && activeItemIds.has(String(r.item_id)));
+    if (!form.supplier_id || !form.delivery_start_date || !form.delivery_end_date || !form.approval_id) {
       setError('Semua field header wajib diisi.');
       return;
     }
     if (validItems.length === 0) {
-      setError('Minimal pilih 1 item.');
+      setError('Minimal pilih 1 item aktif.');
       return;
     }
     if (new Date(form.delivery_end_date) < new Date(form.delivery_start_date)) {
@@ -85,7 +93,8 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
     onSubmit({
       ...form,
       supplier_id: form.supplier_id,
-      items: validItems.map((r) => ({ item_id: r.item_id, qty_ordered: Number(r.qty_ordered) })),
+      approval_id: String(form.approval_id),
+      items: validItems.map((r) => ({ item_id: String(r.item_id), qty_ordered: String(r.qty_ordered) })),
     });
   };
 
@@ -101,7 +110,7 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
             <div className="form-grid">
               <div className="form-group">
                 <label>Warehouse</label>
-                <select name="warehouse_id" value={form.warehouse_id} onChange={handleChange}>
+                <select className="po-select" name="warehouse_id" value={form.warehouse_id} onChange={handleChange}>
                   <option value="1">WH01 - Gudang Utama Jakarta</option>
                   <option value="2">WH02 - Gudang Surabaya</option>
                   <option value="3">WH03 - Gudang Bandung</option>
@@ -109,7 +118,7 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
               </div>
               <div className="form-group">
                 <label>Supplier *</label>
-                <select name="supplier_id" value={form.supplier_id} onChange={handleChange} required>
+                <select className="po-select" name="supplier_id" value={form.supplier_id} onChange={handleChange} required>
                   {suppliers.map((s) => (
                     <option key={s.supplier_id} value={String(s.supplier_id)}>
                       {s.supplier_code} - {s.supplier_name}
@@ -135,15 +144,15 @@ function CreateOrderModal({ onSubmit, onCancel, loading }) {
               </div>
               {orderItems.map((row, idx) => (
                 <div key={idx} className="order-item-row">
-                  <select value={row.item_id} onChange={(e) => handleItemChange(idx, 'item_id', e.target.value)}>
+                  <select className="po-select" value={row.item_id} onChange={(e) => handleItemChange(idx, 'item_id', e.target.value)}>
                     <option value="">-- Pilih Item --</option>
-                    {items.map((it) => (
+                    {activeItems.map((it) => (
                       <option key={it.item_id} value={String(it.item_id)}>
                         {it.item_name} - {it.description?.slice(0, 30)}
                       </option>
                     ))}
                   </select>
-                  <input type="number" min="1" placeholder="Qty" value={row.qty_ordered} onChange={(e) => handleItemChange(idx, 'qty_ordered', Number(e.target.value))} />
+                  <input className="po-input" type="number" min="1" placeholder="Qty" value={row.qty_ordered} onChange={(e) => handleItemChange(idx, 'qty_ordered', Number(e.target.value))} />
                   <button type="button" className="btn-icon btn-delete" onClick={() => removeItemRow(idx)}>✕</button>
                 </div>
               ))}
@@ -174,6 +183,7 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [total, setTotal] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Stable reference for event handlers (button, onChange)
   const fetchOrders = useCallback(async () => {
@@ -215,6 +225,18 @@ export default function Orders() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteOrder(deleteTarget.order_id);
+      flash(`Order ${deleteTarget.order_number} berhasil dihapus.`, 'success');
+      setDeleteTarget(null);
+      fetchOrders();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Gagal menghapus order.');
+    }
+  };
+
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const role = user?.role?.role_code || '';
@@ -226,7 +248,7 @@ export default function Orders() {
           <h1>Orders</h1>
           <p className="page-subtitle">{total} purchase order</p>
         </div>
-        {role === 'STAFF' && (
+        {(role === 'STAFF' || role === 'ADMIN' || role === 'MANAGER') && (
           <button className="btn-primary" onClick={() => setShowCreate(true)}>+ Buat PO</button>
         )}
       </div>
@@ -279,6 +301,7 @@ export default function Orders() {
                   <th>Delivery</th>
                   <th>Items</th>
                   <th>Tanggal</th>
+                  {(role === 'ADMIN' || role === 'MANAGER') && <th>Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -291,6 +314,11 @@ export default function Orders() {
                     <td>{formatDate(o.delivery_start_date)} – {formatDate(o.delivery_end_date)}</td>
                     <td style={{ textAlign: 'center' }}>{o._count?.order_details ?? 0}</td>
                     <td>{formatDate(o.created_at)}</td>
+                    {(role === 'ADMIN' || role === 'MANAGER') && (
+                      <td className="cell-actions">
+                        <button className="btn-icon btn-delete" title="Hapus order" onClick={() => setDeleteTarget(o)}>✕</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -306,6 +334,16 @@ export default function Orders() {
           loading={submitting}
         />
       )}
+
+      <ModalDialog
+        open={Boolean(deleteTarget)}
+        title="Hapus Order"
+        message={`Yakin ingin menghapus order ${deleteTarget?.order_number}?`}
+        showCancel={true}
+        confirmText="Hapus"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

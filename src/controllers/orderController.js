@@ -214,7 +214,7 @@ export const create = async (req, res, next) => {
       // ─── 4b. Insert order details (bulk) ───
       // order_detail_id BUKAN auto-increment — generate sequential IDs
       // dengan FOR UPDATE lock di transaction yang sama.
-      const [{ 'MAX(order_detail_id)': maxId }] = await tx.$queryRaw`
+      const [{ max_order_detail_id: maxId }] = await tx.$queryRaw`
         SELECT MAX(order_detail_id) AS \`max_order_detail_id\`
         FROM order_details
         FOR UPDATE
@@ -341,6 +341,61 @@ export const getById = async (req, res, next) => {
       success: true,
       message: 'Data order berhasil diambil',
       data: order,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/orders/:id
+ * Hapus order beserta semua line item-nya
+ */
+export const remove = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const orderId = BigInt(id);
+
+    const existing = await prisma.order.findUnique({
+      where: { order_id: orderId },
+      select: {
+        order_id: true,
+        order_number: true,
+        order_status: {
+          select: { status_code: true, status_name: true },
+        },
+        _count: { select: { order_details: true } },
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order tidak ditemukan',
+      });
+    }
+
+    // Guard sederhana: order verified/cancelled tidak boleh dihapus manual
+    if (['40', '50'].includes(existing.order_status?.status_code)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order dengan status ${existing.order_status.status_name} tidak bisa dihapus`,
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.orderDetail.deleteMany({
+        where: { order_id: orderId },
+      });
+      await tx.order.delete({
+        where: { order_id: orderId },
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Order ${existing.order_number} berhasil dihapus`,
+      data: { deleted_order_details: existing._count.order_details },
     });
   } catch (error) {
     next(error);

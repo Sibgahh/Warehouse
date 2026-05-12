@@ -86,6 +86,7 @@ export const create = async (req, res, next) => {
         regency: regency || '',
         address: address || '',
         status: status ?? 'A',
+        created_id: req.user.user_id,
       },
     });
 
@@ -140,6 +141,8 @@ export const update = async (req, res, next) => {
         ...(regency !== undefined && { regency }),
         ...(address !== undefined && { address }),
         ...(status !== undefined && { status }),
+        updated_id: req.user.user_id,
+        updated_at: new Date(),
       },
     });
 

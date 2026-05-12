@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
-import { createSubmenu, deleteSubmenu, getMenus, getSubmenus, updateSubmenu } from '../services/api';
+import { createSubmenu, deleteSubmenu, getMenus, getSubmenus, reorderSubmenus, updateSubmenu } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 import { Link } from 'react-router-dom';
+
+const IconGrip = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="18" r="1" />
+    <circle cx="15" cy="6" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="18" r="1" />
+  </svg>
+);
 
 const IconDashboard = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
 const IconOrders = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
@@ -46,7 +54,6 @@ function IconPreview({ iconKey }) {
 
 const EMPTY = {
   menu_id: '',
-  submenu_sequence: '',
   submenu_name: '',
   submenu_icon: 'users',
   submenu_link: '',
@@ -60,11 +67,15 @@ export default function Submenus() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [search, setSearch] = useState('');
+  // dragInfo menyimpan { menuId, index } supaya drag dibatasi di group menu yang sama
+  const [dragInfo, setDragInfo] = useState(null);
+  const [dropKey, setDropKey] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -99,15 +110,16 @@ export default function Submenus() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setFormError('');
     setForm({ ...EMPTY, menu_id: menus[0]?.menu_id ? String(menus[0].menu_id) : '' });
     setShowForm(true);
   };
 
   const openEdit = (submenu) => {
     setEditTarget(submenu);
+    setFormError('');
     setForm({
       menu_id: String(submenu.menu_id),
-      submenu_sequence: submenu.submenu_sequence || '',
       submenu_name: submenu.submenu_name || '',
       submenu_icon: submenu.submenu_icon || '',
       submenu_link: submenu.submenu_link || '',
@@ -118,15 +130,15 @@ export default function Submenus() {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    if (!form.menu_id || !form.submenu_sequence.trim() || !form.submenu_name.trim()) {
-      flash('Menu, sequence, dan nama submenu wajib diisi.');
+    if (!form.menu_id || !form.submenu_name.trim()) {
+      setFormError('Menu dan nama submenu wajib diisi.');
       return;
     }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = {
         menu_id: Number(form.menu_id),
-        submenu_sequence: form.submenu_sequence.trim(),
         submenu_name: form.submenu_name.trim(),
         submenu_icon: form.submenu_icon.trim(),
         submenu_link: form.submenu_link.trim() || '#',
@@ -145,6 +157,54 @@ export default function Submenus() {
       flash(err.response?.data?.message || 'Gagal menyimpan submenu.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── Drag & drop reorder (scoped per menu_id) ─────────────────────────────
+  // Drag hanya valid kalau source dan target di parent menu yang sama.
+  const handleDragStart = (e, menuId, idx) => {
+    setDragInfo({ menuId, index: idx });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, menuId, idx) => {
+    if (!dragInfo || dragInfo.menuId !== menuId) return; // beda menu → tolak drop
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const key = `${menuId}-${idx}`;
+    if (dropKey !== key) setDropKey(key);
+  };
+
+  const handleDragEnd = () => {
+    setDragInfo(null);
+    setDropKey(null);
+  };
+
+  const handleDrop = async (e, menuId, targetIdx) => {
+    e.preventDefault();
+    const src = dragInfo;
+    setDragInfo(null);
+    setDropKey(null);
+    if (!src || src.menuId !== menuId || src.index === targetIdx) return;
+    if (search.trim()) {
+      flash('Hapus filter pencarian dulu sebelum mengubah urutan.');
+      return;
+    }
+
+    // Ambil submenus dalam group menuId saja, lalu reorder dalam group
+    const groupSubs = submenus.filter((s) => Number(s.menu_id) === Number(menuId));
+    const others = submenus.filter((s) => Number(s.menu_id) !== Number(menuId));
+    const [moved] = groupSubs.splice(src.index, 1);
+    groupSubs.splice(targetIdx, 0, moved);
+    setSubmenus([...others, ...groupSubs]); // optimistic (urutan menu jaga di sortedSubmenus)
+
+    try {
+      await reorderSubmenus(Number(menuId), groupSubs.map((s) => Number(s.submenu_id)));
+      flash('Urutan submenu tersimpan.', 'success');
+      await refresh();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Gagal menyimpan urutan.');
+      await refresh();
     }
   };
 
@@ -172,6 +232,16 @@ export default function Submenus() {
     );
   });
 
+  // Index per group (menu_id) untuk dipakai sebagai drag/drop index.
+  // Reset tiap kali menu_id berubah sehingga drop target = posisi dalam group.
+  let prevMenuId = null;
+  let groupIdx = -1;
+  const decoratedSubmenus = filteredSubmenus.map((s) => {
+    if (prevMenuId !== s.menu_id) { groupIdx = 0; prevMenuId = s.menu_id; }
+    else groupIdx += 1;
+    return { ...s, _groupIdx: groupIdx };
+  });
+
   return (
     <div className="page">
       <div className="page-header">
@@ -186,8 +256,6 @@ export default function Submenus() {
         </div>
         <button className="btn-primary" onClick={openCreate}>+ Tambah Submenu</button>
       </div>
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
       <div className="filters-row">
         <div className="search-group">
           <input className="filter-input" placeholder="Cari submenu..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -199,13 +267,16 @@ export default function Submenus() {
           <div className="table-loading"><span className="spinner large" /></div>
         ) : (
           <div className="table-wrapper">
+            <p className="page-subtitle" style={{ margin: '0 0 8px 4px', fontSize: 13 }}>
+              Tip: tarik baris pada kolom <strong>⋮⋮</strong> untuk mengubah urutan. Hanya bisa di-drag dalam menu yang sama.
+            </p>
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 32 }}></th>
                   <th>#</th>
                   <th>Menu</th>
                   <th>Icon</th>
-                  <th>Sequence</th>
                   <th>Submenu</th>
                   <th>Link</th>
                   <th>Status</th>
@@ -213,21 +284,38 @@ export default function Submenus() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSubmenus.map((s, i) => (
-                  <tr key={s.submenu_id}>
-                    <td>{i + 1}</td>
-                    <td>{s.menu?.menu_name || '-'}</td>
-                    <td><IconPreview iconKey={s.submenu_icon} /></td>
-                    <td>{s.submenu_sequence}</td>
-                    <td className="text-bold">{s.submenu_name}</td>
-                    <td>{s.submenu_link || '—'}</td>
-                    <td>{s.is_active ? 'Aktif' : 'Nonaktif'}</td>
-                    <td className="cell-actions">
-                      <button className="btn-icon btn-edit" onClick={() => openEdit(s)} title="Edit">✎</button>
-                      <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(s)} title="Hapus">✕</button>
-                    </td>
-                  </tr>
-                ))}
+                {decoratedSubmenus.map((s, i) => {
+                  const menuId = Number(s.menu_id);
+                  const isDraggable = !search.trim();
+                  const isDragSource = dragInfo && dragInfo.menuId === menuId && dragInfo.index === s._groupIdx;
+                  const isDropTarget = dropKey === `${menuId}-${s._groupIdx}` && !isDragSource;
+                  const dropAllowed = !dragInfo || dragInfo.menuId === menuId;
+                  return (
+                    <tr
+                      key={s.submenu_id}
+                      draggable={isDraggable}
+                      onDragStart={(e) => handleDragStart(e, menuId, s._groupIdx)}
+                      onDragOver={(e) => handleDragOver(e, menuId, s._groupIdx)}
+                      onDrop={(e) => handleDrop(e, menuId, s._groupIdx)}
+                      onDragEnd={handleDragEnd}
+                      className={`${isDragSource ? 'row-dragging' : ''} ${isDropTarget ? 'row-drop-target' : ''} ${dragInfo && !dropAllowed ? 'row-drop-blocked' : ''}`}
+                    >
+                      <td className="drag-handle" title={isDraggable ? 'Tarik untuk reorder dalam menu yang sama' : 'Hapus filter dulu'} style={{ cursor: isDraggable ? 'grab' : 'not-allowed', opacity: isDraggable ? 0.7 : 0.3 }}>
+                        <IconGrip />
+                      </td>
+                      <td>{i + 1}</td>
+                      <td>{s.menu?.menu_name || '-'}</td>
+                      <td><IconPreview iconKey={s.submenu_icon} /></td>
+                      <td className="text-bold">{s.submenu_name}</td>
+                      <td>{s.submenu_link || '—'}</td>
+                      <td>{s.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                      <td className="cell-actions">
+                        <button className="btn-icon btn-edit" onClick={() => openEdit(s)} title="Edit">✎</button>
+                        <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(s)} title="Hapus">✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -241,6 +329,12 @@ export default function Submenus() {
             <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
               Submenu adalah fitur turunan dari menu utama di sidebar.
             </p>
+            {formError && <div className="alert alert-error">{formError}</div>}
+            {!editTarget && (
+              <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+                Submenu baru akan ditempatkan paling akhir dalam menu yang dipilih. Atur urutan via drag-and-drop di tabel.
+              </p>
+            )}
             <form onSubmit={submitForm} className="form-grid">
               <div className="form-group">
                 <label>Menu *</label>
@@ -249,11 +343,6 @@ export default function Submenus() {
                   <option value="">Pilih Menu</option>
                   {menus.map((m) => <option key={m.menu_id} value={m.menu_id}>{m.menu_name}</option>)}
                 </select>
-              </div>
-              <div className="form-group">
-                <label>Sequence *</label>
-                <small style={{ color: 'var(--text-muted)' }}>Urutan tampil di dalam parent menu</small>
-                <input value={form.submenu_sequence} onChange={(e) => setForm((p) => ({ ...p, submenu_sequence: e.target.value }))} />
               </div>
               <div className="form-group">
                 <label>Nama Submenu *</label>
@@ -310,6 +399,9 @@ export default function Submenus() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

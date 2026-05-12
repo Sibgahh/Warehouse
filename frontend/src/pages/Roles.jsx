@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createRole, deleteRole, getRoles, updateRole } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const EMPTY = {
   role_code: '',
@@ -14,6 +15,7 @@ export default function Roles() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -50,12 +52,14 @@ export default function Roles() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setFormError('');
     setForm(EMPTY);
     setShowForm(true);
   };
 
   const openEdit = (role) => {
     setEditTarget(role);
+    setFormError('');
     setForm({
       role_code: role.role_code || '',
       role_name: role.role_name || '',
@@ -67,9 +71,10 @@ export default function Roles() {
   const submitForm = async (e) => {
     e.preventDefault();
     if (!form.role_code.trim() || !form.role_name.trim()) {
-      flash('Role code dan role name wajib diisi.');
+      setFormError('Role code dan role name wajib diisi.');
       return;
     }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = {
@@ -116,9 +121,6 @@ export default function Roles() {
         <button className="btn-primary" onClick={openCreate}>+ Tambah Role</button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="card">
         {loading ? (
           <div className="table-loading"><span className="spinner large" /></div>
@@ -158,6 +160,7 @@ export default function Roles() {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{editTarget ? 'Edit Role' : 'Tambah Role'}</h2>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <form onSubmit={submitForm} className="form-grid">
               <div className="form-group">
                 <label>Role Code *</label>
@@ -191,6 +194,9 @@ export default function Roles() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

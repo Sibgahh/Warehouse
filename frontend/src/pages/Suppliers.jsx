@@ -6,6 +6,7 @@ import {
   deleteSupplier,
 } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 // ── Generate supplier code ─────────────────────────────────────────────────────
 function generateSupplierCode() {
@@ -271,17 +272,6 @@ export default function Suppliers() {
         )}
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="alert alert-success" role="alert">
-          {success}
-        </div>
-      )}
-
       <div className="filters-row">
         <div className="search-group">
           <span className="search-icon">
@@ -380,6 +370,9 @@ export default function Suppliers() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

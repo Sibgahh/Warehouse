@@ -275,7 +275,11 @@ export const getAll = async (req, res, next) => {
     const where = {};
 
     if (search) {
-      where.order_number = { contains: search };
+      where.OR = [
+        { order_number: { contains: search } },
+        { supplier: { supplier_name: { contains: search } } },
+        { supplier: { supplier_code: { contains: search } } },
+      ];
     }
     if (status_code) {
       where.order_status = { status_code };

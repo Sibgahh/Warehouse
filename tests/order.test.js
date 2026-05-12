@@ -138,7 +138,7 @@ describe('Order Controller', () => {
       );
     });
 
-    it('✅ filters by search on order_number', async () => {
+    it('✅ filters by search on order_number / supplier name / supplier code (OR)', async () => {
       prismaMock.order.findMany.mockResolvedValue([]);
       prismaMock.order.count.mockResolvedValue(0);
 
@@ -148,7 +148,13 @@ describe('Order Controller', () => {
       await getAll(req, res, mockNext());
 
       expect(prismaMock.order.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ order_number: { contains: 'PO2606' } }) })
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ order_number: { contains: 'PO2606' } }),
+            ]),
+          }),
+        })
       );
     });
 

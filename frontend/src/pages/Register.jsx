@@ -67,11 +67,7 @@ export default function Register() {
           Daftar akun baru (otomatis role Staff)
         </p>
 
-        {error && (
-          <div className="alert alert-error" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
 
         <form onSubmit={handleSubmit} className="auth-form" noValidate>
           <div className="form-group">

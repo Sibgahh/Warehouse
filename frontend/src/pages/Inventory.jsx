@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createInventory, deleteInventory, getInventory, getItems, updateInventory } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const EMPTY = { item_id: '', on_hand_qty: '0', on_ordered_qty: '0' };
 
@@ -12,6 +13,7 @@ export default function Inventory() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -44,7 +46,11 @@ export default function Inventory() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.on_hand_qty.trim()) return flash('on_hand_qty wajib diisi.');
+    if (!form.on_hand_qty.trim()) {
+      setFormError('on_hand_qty wajib diisi.');
+      return;
+    }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = {
@@ -88,11 +94,8 @@ export default function Inventory() {
           <h1>Inventory</h1>
           <p className="page-subtitle">Kelola stok on-hand dan on-ordered per item</p>
         </div>
-        <button className="btn-primary" onClick={() => { setEditTarget(null); setForm({ ...EMPTY, item_id: items[0]?.item_id ? String(items[0].item_id) : '' }); setShowForm(true); }}>+ Tambah Inventory</button>
+        <button className="btn-primary" onClick={() => { setEditTarget(null); setFormError(''); setForm({ ...EMPTY, item_id: items[0]?.item_id ? String(items[0].item_id) : '' }); setShowForm(true); }}>+ Tambah Inventory</button>
       </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
 
       <div className="filters-row">
         <div className="search-group">
@@ -122,7 +125,7 @@ export default function Inventory() {
                     <td>{Number(r.on_ordered_qty || 0)}</td>
                     <td>{Number(r.item?.min_stock || 0)} / {Number(r.item?.max_stock || 0)}</td>
                     <td className="cell-actions">
-                      <button className="btn-icon btn-edit" onClick={() => { setEditTarget(r); setForm({ item_id: String(r.item_id), on_hand_qty: String(Number(r.on_hand_qty)), on_ordered_qty: String(Number(r.on_ordered_qty || 0)) }); setShowForm(true); }}>✎</button>
+                      <button className="btn-icon btn-edit" onClick={() => { setEditTarget(r); setFormError(''); setForm({ item_id: String(r.item_id), on_hand_qty: String(Number(r.on_hand_qty)), on_ordered_qty: String(Number(r.on_ordered_qty || 0)) }); setShowForm(true); }}>✎</button>
                       <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(r)}>✕</button>
                     </td>
                   </tr>
@@ -137,6 +140,7 @@ export default function Inventory() {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{editTarget ? 'Adjust Inventory' : 'Tambah Inventory'}</h2>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <form onSubmit={submit} className="form-grid">
               {!editTarget && (
                 <div className="form-group span-full">
@@ -167,6 +171,9 @@ export default function Inventory() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

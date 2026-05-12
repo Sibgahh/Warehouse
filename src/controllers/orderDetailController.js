@@ -23,6 +23,8 @@ const orderDetailSelect = {
     select: {
       item_id: true,
       item_name: true,
+      description: true,
+      unit_cost: true,
     },
   },
   created_by: {

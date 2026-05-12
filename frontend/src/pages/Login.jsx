@@ -45,11 +45,7 @@ export default function Login() {
         <h1>Masuk</h1>
         <p className="auth-subtitle">Silakan masukkan kredensial Anda</p>
 
-        {error && (
-          <div className="alert alert-error" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
 
         <form onSubmit={handleSubmit} className="auth-form" noValidate>
           <div className="form-group">

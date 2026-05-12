@@ -450,11 +450,13 @@ export const storeUpdateSchema = storeCreateSchema.partial().refine(
 
 // ─── Menu: Create/Update ──────────────────────────────────────────────────────
 export const menuCreateSchema = z.object({
+  // Sequence opsional di payload — backend auto-generate dari posisi terakhir.
+  // User mengatur urutan via drag-and-drop di UI.
   menu_sequence: z
-    .string({ required_error: 'menu_sequence wajib diisi' })
-    .min(1, 'menu_sequence tidak boleh kosong')
+    .string()
     .max(5, 'menu_sequence maksimal 5 karakter')
-    .trim(),
+    .trim()
+    .optional(),
   menu_name: z
     .string({ required_error: 'menu_name wajib diisi' })
     .min(1, 'menu_name tidak boleh kosong')
@@ -471,17 +473,30 @@ export const menuUpdateSchema = menuCreateSchema.partial().refine(
   { message: 'Minimal satu field harus diisi' }
 );
 
+// Payload: { items: [menu_id, menu_id, ...] } — urutannya menentukan sequence baru.
+export const menuReorderSchema = z.object({
+  items: z
+    .array(
+      z.coerce
+        .number({ invalid_type_error: 'menu_id harus angka positif' })
+        .int('menu_id harus angka positif')
+        .positive('menu_id harus angka positif')
+    )
+    .min(1, 'items minimal 1 menu_id'),
+});
+
 // ─── Submenu: Create/Update ───────────────────────────────────────────────────
 export const submenuCreateSchema = z.object({
   menu_id: z.coerce
     .number({ required_error: 'menu_id wajib diisi', invalid_type_error: 'menu_id harus angka positif' })
     .int('menu_id harus angka positif')
     .positive('menu_id harus angka positif'),
+  // Sequence opsional — backend auto-generate dari posisi terakhir per menu_id.
   submenu_sequence: z
-    .string({ required_error: 'submenu_sequence wajib diisi' })
-    .min(1, 'submenu_sequence tidak boleh kosong')
+    .string()
     .max(5, 'submenu_sequence maksimal 5 karakter')
-    .trim(),
+    .trim()
+    .optional(),
   submenu_name: z
     .string({ required_error: 'submenu_name wajib diisi' })
     .min(1, 'submenu_name tidak boleh kosong')
@@ -496,6 +511,22 @@ export const submenuUpdateSchema = submenuCreateSchema.partial().refine(
   (data) => Object.keys(data).length > 0,
   { message: 'Minimal satu field harus diisi' }
 );
+
+// Payload: { menu_id, items: [submenu_id, ...] } — urutan dalam satu parent menu.
+export const submenuReorderSchema = z.object({
+  menu_id: z.coerce
+    .number({ required_error: 'menu_id wajib diisi', invalid_type_error: 'menu_id harus angka positif' })
+    .int('menu_id harus angka positif')
+    .positive('menu_id harus angka positif'),
+  items: z
+    .array(
+      z.coerce
+        .number({ invalid_type_error: 'submenu_id harus angka positif' })
+        .int('submenu_id harus angka positif')
+        .positive('submenu_id harus angka positif')
+    )
+    .min(1, 'items minimal 1 submenu_id'),
+});
 
 // ─── Role Menu/Submenu: Create ────────────────────────────────────────────────
 export const roleMenuCreateSchema = z.object({

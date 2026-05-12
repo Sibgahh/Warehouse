@@ -17,7 +17,6 @@ import Stores from './pages/Stores';
 import OrderStatuses from './pages/OrderStatuses';
 import Inventory from './pages/Inventory';
 import Roles from './pages/Roles';
-import OrderDetails from './pages/OrderDetails';
 import AccessConfig from './pages/AccessConfig';
 import { isTokenExpired } from './utils/token';
 
@@ -84,7 +83,6 @@ export default function App() {
           <Route path="order-statuses" element={<OrderStatuses />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="roles" element={<Roles />} />
-          <Route path="order-details" element={<OrderDetails />} />
           <Route path="access-config" element={<AccessConfig />} />
         </Route>
 

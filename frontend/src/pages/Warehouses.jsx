@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createWarehouse, deleteWarehouse, getWarehouses, updateWarehouse } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 export default function Warehouses() {
   const [warehouses, setWarehouses] = useState([]);
@@ -8,6 +9,7 @@ export default function Warehouses() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -53,6 +55,7 @@ export default function Warehouses() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setFormError('');
     setForm({
       warehouse_code: '',
       warehouse_name: '',
@@ -68,6 +71,7 @@ export default function Warehouses() {
 
   const openEdit = (warehouse) => {
     setEditTarget(warehouse);
+    setFormError('');
     setForm({
       warehouse_code: warehouse.warehouse_code || '',
       warehouse_name: warehouse.warehouse_name || '',
@@ -84,10 +88,11 @@ export default function Warehouses() {
   const submitForm = async (e) => {
     e.preventDefault();
     if (!form.warehouse_code.trim()) {
-      flash('Kode warehouse wajib diisi.');
+      setFormError('Kode warehouse wajib diisi.');
       return;
     }
 
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = {
@@ -141,9 +146,6 @@ export default function Warehouses() {
         <button className="btn-primary" onClick={openCreate}>+ Tambah Warehouse</button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="card">
         {loading ? (
           <div className="table-loading"><span className="spinner large" /></div>
@@ -193,6 +195,7 @@ export default function Warehouses() {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{editTarget ? 'Edit Warehouse' : 'Tambah Warehouse'}</h2>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <form onSubmit={submitForm} className="form-grid">
               <div className="form-group">
                 <label>Kode *</label>
@@ -247,6 +250,9 @@ export default function Warehouses() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

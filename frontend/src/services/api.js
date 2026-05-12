@@ -113,6 +113,8 @@ export const getMenu = (id) => api.get(`/api/menus/${id}`);
 export const createMenu = (data) => api.post('/api/menus', data);
 export const updateMenu = (id, data) => api.put(`/api/menus/${id}`, data);
 export const deleteMenu = (id) => api.delete(`/api/menus/${id}`);
+// items: array of menu_id sesuai urutan baru
+export const reorderMenus = (items) => api.patch('/api/menus/reorder', { items });
 
 // ── Submenus ────────────────────────────────────────────────────────────────
 export const getSubmenus = (params) => api.get('/api/submenus', { params });
@@ -120,6 +122,9 @@ export const getSubmenu = (id) => api.get(`/api/submenus/${id}`);
 export const createSubmenu = (data) => api.post('/api/submenus', data);
 export const updateSubmenu = (id, data) => api.put(`/api/submenus/${id}`, data);
 export const deleteSubmenu = (id) => api.delete(`/api/submenus/${id}`);
+// menu_id: parent menu, items: array of submenu_id sesuai urutan baru dalam menu itu
+export const reorderSubmenus = (menu_id, items) =>
+  api.patch('/api/submenus/reorder', { menu_id, items });
 
 // ── Role Menus ──────────────────────────────────────────────────────────────
 export const getRoleMenus = () => api.get('/api/role-menus');

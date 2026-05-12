@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getItems, createItem, updateItem, deleteItem, getSuppliers } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const STATUS_OPTIONS = [
   { value: 'A', label: 'Active' },
@@ -38,21 +39,23 @@ function ItemForm({ initial, onSubmit, onCancel, loading }) {
   const [suppliers, setSuppliers] = useState([]);
   const [error, setError] = useState('');
 
+  // Fetch sekali saat mount. Pakai functional setForm supaya default
+  // supplier_id hanya di-set kalau form belum punya pilihan (mode create).
   useEffect(() => {
     let ignore = false;
     getSuppliers({ limit: 100 })
       .then(({ data }) => {
-        if (!ignore) {
-          const list = data.data || [];
-          setSuppliers(list);
-          if (!form.supplier_id && list.length > 0) {
-            setForm((f) => ({ ...f, supplier_id: String(list[0].supplier_id) }));
-          }
-        }
+        if (ignore) return;
+        const list = data.data || [];
+        setSuppliers(list);
+        setForm((f) => {
+          if (f.supplier_id || list.length === 0) return f;
+          return { ...f, supplier_id: String(list[0].supplier_id) };
+        });
       })
       .catch(() => {});
     return () => { ignore = true; };
-  }, [form.supplier_id]);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -317,9 +320,6 @@ export default function Items() {
         )}
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="filters-row">
         <div className="search-group">
           <span className="search-icon">
@@ -416,6 +416,9 @@ export default function Items() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

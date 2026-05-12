@@ -10,6 +10,10 @@ const menuSelect = {
   is_active: true,
 };
 
+// Format sequence sebagai 3-digit padded string ('010', '020', '030', ...) supaya
+// string-sort di DB tetap konsisten dengan numeric sort. Cukup untuk 999 menu.
+const formatSeq = (n) => String(n).padStart(3, '0');
+
 export const getAll = async (req, res, next) => {
   try {
     const { search, is_active } = req.query;
@@ -44,12 +48,22 @@ export const getById = async (req, res, next) => {
 export const create = async (req, res, next) => {
   try {
     const { menu_sequence, menu_name, menu_icon, menu_link, is_submenu, is_active } = req.body;
-    const duplicate = await prisma.menu.findFirst({ where: { menu_sequence, menu_name } });
+
+    // Auto-generate sequence kalau client tidak supply (UI baru pakai drag-and-drop).
+    // Ambil sequence terbesar (sebagai angka) lalu +10.
+    let nextSequence = menu_sequence;
+    if (!nextSequence) {
+      const last = await prisma.menu.findFirst({ orderBy: { menu_sequence: 'desc' }, select: { menu_sequence: true } });
+      const lastNum = last ? Number(last.menu_sequence) || 0 : 0;
+      nextSequence = formatSeq(lastNum + 10);
+    }
+
+    const duplicate = await prisma.menu.findFirst({ where: { menu_sequence: nextSequence, menu_name } });
     if (duplicate) return res.status(409).json({ success: false, message: 'Kombinasi menu_sequence + menu_name sudah digunakan' });
 
     const menu = await prisma.menu.create({
       data: {
-        menu_sequence,
+        menu_sequence: nextSequence,
         menu_name,
         menu_icon: menu_icon || null,
         menu_link: menu_link || '#',
@@ -59,6 +73,36 @@ export const create = async (req, res, next) => {
       select: menuSelect,
     });
     res.status(201).json({ success: true, message: 'Menu berhasil ditambahkan', data: menu });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/menus/reorder
+ * Body: { items: [menu_id, menu_id, ...] }
+ *
+ * Re-assign menu_sequence sesuai urutan array (index 0 → '010', dst).
+ * Transaction biar atomic.
+ */
+export const reorder = async (req, res, next) => {
+  try {
+    const { items } = req.body;
+
+    await prisma.$transaction(
+      items.map((menuId, idx) =>
+        prisma.menu.update({
+          where: { menu_id: menuId },
+          data: { menu_sequence: formatSeq((idx + 1) * 10) },
+        })
+      )
+    );
+
+    const menus = await prisma.menu.findMany({
+      select: menuSelect,
+      orderBy: [{ menu_sequence: 'asc' }, { menu_id: 'asc' }],
+    });
+    res.status(200).json({ success: true, message: 'Urutan menu berhasil diperbarui', data: menus });
   } catch (error) {
     next(error);
   }

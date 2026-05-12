@@ -105,7 +105,7 @@ export default function Dashboard() {
             <div className="dashboard-section recent-orders">
               <div className="section-header">
                 <div className="header-text">
-                  <h3>Transaksi Terbaru</h3>
+                  <h3>Orders Terbaru</h3>
                   <p>3 order pembelian terakhir</p>
                 </div>
                 <Link to="/orders" className="btn-text">Lihat Semua →</Link>
@@ -138,7 +138,7 @@ export default function Dashboard() {
                       </tr>
                     ))}
                     {recentOrders.length === 0 && (
-                      <tr><td colSpan="3" style={{ textAlign: 'center', padding: '20px' }}>Belum ada transaksi.</td></tr>
+                      <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>Belum ada order.</td></tr>
                     )}
                   </tbody>
                 </table>

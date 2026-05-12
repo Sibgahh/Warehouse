@@ -26,13 +26,6 @@ const STEPS = [
       { to: '/role-submenus', label: 'Assign Role Submenus' },
     ],
   },
-  {
-    no: 4,
-    title: '(Opsional) Edit Detail Order Item',
-    desc: 'Jika perlu koreksi line item order secara manual, gunakan Order Details.',
-    to: '/order-details',
-    action: 'Kelola Order Details',
-  },
 ];
 
 export default function AccessConfig() {

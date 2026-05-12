@@ -11,6 +11,10 @@ const submenuSelect = {
   menu: { select: { menu_id: true, menu_name: true } },
 };
 
+// Format sequence sebagai 3-digit padded string supaya string-sort konsisten
+// dengan numeric sort. Cukup untuk 999 submenu per menu.
+const formatSeq = (n) => String(n).padStart(3, '0');
+
 export const getAll = async (req, res, next) => {
   try {
     const { search, menu_id, is_active } = req.query;
@@ -51,16 +55,29 @@ export const getById = async (req, res, next) => {
 export const create = async (req, res, next) => {
   try {
     const { menu_id, submenu_sequence, submenu_name, submenu_icon, submenu_link, is_active } = req.body;
-    const menu = await prisma.menu.findUnique({ where: { menu_id: Number(menu_id) } });
+    const menuIdNum = Number(menu_id);
+    const menu = await prisma.menu.findUnique({ where: { menu_id: menuIdNum } });
     if (!menu) return res.status(400).json({ success: false, message: 'menu_id tidak valid' });
 
-    const duplicate = await prisma.submenu.findFirst({ where: { menu_id: Number(menu_id), submenu_sequence, submenu_name } });
+    // Auto-generate sequence scoped per menu_id kalau client tidak supply.
+    let nextSequence = submenu_sequence;
+    if (!nextSequence) {
+      const last = await prisma.submenu.findFirst({
+        where: { menu_id: menuIdNum },
+        orderBy: { submenu_sequence: 'desc' },
+        select: { submenu_sequence: true },
+      });
+      const lastNum = last ? Number(last.submenu_sequence) || 0 : 0;
+      nextSequence = formatSeq(lastNum + 10);
+    }
+
+    const duplicate = await prisma.submenu.findFirst({ where: { menu_id: menuIdNum, submenu_sequence: nextSequence, submenu_name } });
     if (duplicate) return res.status(409).json({ success: false, message: 'Kombinasi menu + sequence + submenu sudah digunakan' });
 
     const submenu = await prisma.submenu.create({
       data: {
-        menu_id: Number(menu_id),
-        submenu_sequence,
+        menu_id: menuIdNum,
+        submenu_sequence: nextSequence,
         submenu_name,
         submenu_icon: submenu_icon || null,
         submenu_link: submenu_link || '#',
@@ -69,6 +86,38 @@ export const create = async (req, res, next) => {
       select: submenuSelect,
     });
     res.status(201).json({ success: true, message: 'Submenu berhasil ditambahkan', data: submenu });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/submenus/reorder
+ * Body: { menu_id, items: [submenu_id, submenu_id, ...] }
+ *
+ * Re-assign submenu_sequence sesuai urutan array (per menu_id scope).
+ * Hanya update yang menu_id-nya cocok untuk safety.
+ */
+export const reorder = async (req, res, next) => {
+  try {
+    const { menu_id, items } = req.body;
+    const menuIdNum = Number(menu_id);
+
+    await prisma.$transaction(
+      items.map((submenuId, idx) =>
+        prisma.submenu.updateMany({
+          where: { submenu_id: submenuId, menu_id: menuIdNum },
+          data: { submenu_sequence: formatSeq((idx + 1) * 10) },
+        })
+      )
+    );
+
+    const submenus = await prisma.submenu.findMany({
+      where: { menu_id: menuIdNum },
+      select: submenuSelect,
+      orderBy: [{ submenu_sequence: 'asc' }, { submenu_id: 'asc' }],
+    });
+    res.status(200).json({ success: true, message: 'Urutan submenu berhasil diperbarui', data: submenus });
   } catch (error) {
     next(error);
   }

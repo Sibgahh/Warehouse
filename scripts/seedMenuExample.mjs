@@ -7,6 +7,12 @@ async function main() {
     SET menu_name = 'Dashboard'
     WHERE menu_name = 'Utama'
   `);
+  // Normalisasi data lama: "Transaksi" -> "Orders"
+  await prisma.$executeRawUnsafe(`
+    UPDATE menus
+    SET menu_name = 'Orders'
+    WHERE menu_name = 'Transaksi'
+  `);
   await prisma.$executeRawUnsafe(`
     UPDATE menus
     SET menu_icon = 'settings'
@@ -46,7 +52,7 @@ async function main() {
     INSERT IGNORE INTO menus (menu_sequence, menu_name, menu_icon, menu_link, is_submenu, is_active)
     VALUES
       ('10', 'Dashboard', 'dashboard', '/', 0, 1),
-      ('20', 'Transaksi', 'orders', '/orders', 0, 1),
+      ('20', 'Orders', 'orders', '/orders', 0, 1),
       ('30', 'Master Data', 'master', '#', 1, 1),
       ('40', 'Analisa', 'reports', '#', 1, 1),
       ('50', 'Admin', 'users', '#', 1, 1),
@@ -61,12 +67,15 @@ async function main() {
       SELECT 'Master Data' AS menu_name, '10' AS submenu_sequence, 'Suppliers' AS submenu_name, 'suppliers' AS submenu_icon, '/suppliers' AS submenu_link
       UNION ALL SELECT 'Master Data', '20', 'Items', 'items', '/items'
       UNION ALL SELECT 'Master Data', '30', 'Warehouses', 'warehouses', '/warehouses'
+      UNION ALL SELECT 'Master Data', '40', 'Stores', 'warehouses', '/stores'
+      UNION ALL SELECT 'Master Data', '50', 'Inventory', 'items', '/inventory'
       UNION ALL SELECT 'Analisa', '10', 'Reports', 'reports', '/reports'
       UNION ALL SELECT 'Admin', '10', 'Manajemen User', 'users', '/users'
       UNION ALL SELECT 'Konfigurasi Akses', '10', 'Menus', 'settings', '/menus'
       UNION ALL SELECT 'Konfigurasi Akses', '20', 'Submenus', 'settings', '/submenus'
       UNION ALL SELECT 'Konfigurasi Akses', '30', 'Konfigurasi Akses', 'settings', '/access-config'
       UNION ALL SELECT 'Konfigurasi Akses', '40', 'Roles', 'settings', '/roles'
+      UNION ALL SELECT 'Konfigurasi Akses', '50', 'Order Statuses', 'settings', '/order-statuses'
     ) x
     INNER JOIN menus m ON m.menu_name = x.menu_name
   `);
@@ -78,11 +87,11 @@ async function main() {
     FROM roles r
     INNER JOIN menus m
       ON (
-        (r.role_code = 'ADMIN' AND m.menu_name IN ('Dashboard', 'Transaksi', 'Master Data', 'Analisa', 'Admin', 'Konfigurasi Akses'))
+        (r.role_code = 'ADMIN' AND m.menu_name IN ('Dashboard', 'Orders', 'Master Data', 'Analisa', 'Admin', 'Konfigurasi Akses'))
         OR
-        (r.role_code = 'MANAGER' AND m.menu_name IN ('Dashboard', 'Transaksi', 'Master Data', 'Analisa'))
+        (r.role_code = 'MANAGER' AND m.menu_name IN ('Dashboard', 'Orders', 'Master Data', 'Analisa'))
         OR
-        (r.role_code = 'STAFF' AND m.menu_name IN ('Dashboard', 'Transaksi'))
+        (r.role_code = 'STAFF' AND m.menu_name IN ('Dashboard', 'Orders'))
       )
     WHERE r.role_code IN ('ADMIN', 'MANAGER', 'STAFF')
   `);
@@ -94,9 +103,9 @@ async function main() {
     FROM roles r
     INNER JOIN submenus s
       ON (
-        (r.role_code = 'ADMIN' AND s.submenu_name IN ('Suppliers', 'Items', 'Warehouses', 'Reports', 'Manajemen User', 'Menus', 'Submenus', 'Konfigurasi Akses', 'Roles'))
+        (r.role_code = 'ADMIN' AND s.submenu_name IN ('Suppliers', 'Items', 'Warehouses', 'Stores', 'Inventory', 'Reports', 'Manajemen User', 'Menus', 'Submenus', 'Konfigurasi Akses', 'Roles', 'Order Statuses'))
         OR
-        (r.role_code = 'MANAGER' AND s.submenu_name IN ('Suppliers', 'Items', 'Warehouses', 'Reports'))
+        (r.role_code = 'MANAGER' AND s.submenu_name IN ('Suppliers', 'Items', 'Warehouses', 'Stores', 'Inventory', 'Reports'))
       )
     WHERE r.role_code IN ('ADMIN', 'MANAGER')
   `);

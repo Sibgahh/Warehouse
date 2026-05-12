@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
-import { createMenu, deleteMenu, getMenus, updateMenu } from '../services/api';
+import { createMenu, deleteMenu, getMenus, reorderMenus, updateMenu } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 import { Link } from 'react-router-dom';
+
+const IconGrip = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="18" r="1" />
+    <circle cx="15" cy="6" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="18" r="1" />
+  </svg>
+);
 
 const IconDashboard = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
 const IconOrders = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
@@ -48,7 +56,6 @@ function IconPreview({ iconKey }) {
 }
 
 const EMPTY_FORM = {
-  menu_sequence: '',
   menu_name: '',
   menu_icon: 'dashboard',
   menu_link: '',
@@ -62,11 +69,14 @@ export default function Menus() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState('');
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -100,14 +110,15 @@ export default function Menus() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setFormError('');
     setForm(EMPTY_FORM);
     setShowForm(true);
   };
 
   const openEdit = (menu) => {
     setEditTarget(menu);
+    setFormError('');
     setForm({
-      menu_sequence: menu.menu_sequence || '',
       menu_name: menu.menu_name || '',
       menu_icon: menu.menu_icon || '',
       menu_link: menu.menu_link || '',
@@ -119,15 +130,15 @@ export default function Menus() {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    if (!form.menu_sequence.trim() || !form.menu_name.trim()) {
-      flash('Sequence dan nama menu wajib diisi.');
+    if (!form.menu_name.trim()) {
+      setFormError('Nama menu wajib diisi.');
       return;
     }
 
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = {
-        menu_sequence: form.menu_sequence.trim(),
         menu_name: form.menu_name.trim(),
         menu_icon: form.menu_icon.trim(),
         menu_link: form.menu_link.trim() || '#',
@@ -147,6 +158,53 @@ export default function Menus() {
       flash(err.response?.data?.message || 'Gagal menyimpan menu.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── Drag & drop reorder ──────────────────────────────────────────────────
+  // Pakai HTML5 native DnD. Saat drop:
+  //   1. Pindahkan item di state lokal (optimistic update)
+  //   2. Kirim array menu_id ke backend → backend re-write sequence
+  //   3. Refresh untuk dapat sequence final
+  const handleDragStart = (e, idx) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropIndex !== idx) setDropIndex(idx);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDropIndex(null);
+  };
+
+  const handleDrop = async (e, targetIdx) => {
+    e.preventDefault();
+    const sourceIdx = dragIndex;
+    setDragIndex(null);
+    setDropIndex(null);
+    if (sourceIdx === null || sourceIdx === targetIdx) return;
+    if (search.trim()) {
+      flash('Hapus filter pencarian dulu sebelum mengubah urutan.');
+      return;
+    }
+
+    const reordered = [...menus];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    setMenus(reordered); // optimistic
+
+    try {
+      await reorderMenus(reordered.map((m) => Number(m.menu_id)));
+      flash('Urutan menu tersimpan.', 'success');
+      await refresh();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Gagal menyimpan urutan.');
+      await refresh(); // rollback ke state DB
     }
   };
 
@@ -188,9 +246,6 @@ export default function Menus() {
         <button className="btn-primary" onClick={openCreate}>+ Tambah Menu</button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="filters-row">
         <div className="search-group">
           <input className="filter-input" placeholder="Cari menu..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -202,12 +257,15 @@ export default function Menus() {
           <div className="table-loading"><span className="spinner large" /></div>
         ) : (
           <div className="table-wrapper">
+            <p className="page-subtitle" style={{ margin: '0 0 8px 4px', fontSize: 13 }}>
+              Tip: tarik baris pada kolom <strong>⋮⋮</strong> untuk mengubah urutan menu.
+            </p>
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 32 }}></th>
                   <th>#</th>
                   <th>Icon</th>
-                  <th>Sequence</th>
                   <th>Nama</th>
                   <th>Link</th>
                   <th>Submenu?</th>
@@ -216,21 +274,34 @@ export default function Menus() {
                 </tr>
               </thead>
               <tbody>
-                {filteredMenus.map((menu, i) => (
-                  <tr key={menu.menu_id}>
-                    <td>{i + 1}</td>
-                    <td><IconPreview iconKey={menu.menu_icon} /></td>
-                    <td>{menu.menu_sequence}</td>
-                    <td className="text-bold">{menu.menu_name}</td>
-                    <td>{menu.menu_link || '—'}</td>
-                    <td>{menu.is_submenu ? 'Ya' : 'Tidak'}</td>
-                    <td>{menu.is_active ? 'Aktif' : 'Nonaktif'}</td>
-                    <td className="cell-actions">
-                      <button className="btn-icon btn-edit" onClick={() => openEdit(menu)} title="Edit">✎</button>
-                      <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(menu)} title="Hapus">✕</button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredMenus.map((menu, i) => {
+                  const isDraggable = !search.trim();
+                  return (
+                    <tr
+                      key={menu.menu_id}
+                      draggable={isDraggable}
+                      onDragStart={(e) => handleDragStart(e, i)}
+                      onDragOver={(e) => handleDragOver(e, i)}
+                      onDrop={(e) => handleDrop(e, i)}
+                      onDragEnd={handleDragEnd}
+                      className={`${dragIndex === i ? 'row-dragging' : ''} ${dropIndex === i && dragIndex !== i ? 'row-drop-target' : ''}`}
+                    >
+                      <td className="drag-handle" title={isDraggable ? 'Tarik untuk reorder' : 'Hapus filter dulu'} style={{ cursor: isDraggable ? 'grab' : 'not-allowed', opacity: isDraggable ? 0.7 : 0.3 }}>
+                        <IconGrip />
+                      </td>
+                      <td>{i + 1}</td>
+                      <td><IconPreview iconKey={menu.menu_icon} /></td>
+                      <td className="text-bold">{menu.menu_name}</td>
+                      <td>{menu.menu_link || '—'}</td>
+                      <td>{menu.is_submenu ? 'Ya' : 'Tidak'}</td>
+                      <td>{menu.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                      <td className="cell-actions">
+                        <button className="btn-icon btn-edit" onClick={() => openEdit(menu)} title="Edit">✎</button>
+                        <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(menu)} title="Hapus">✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredMenus.length === 0 && (
                   <tr><td colSpan="8" style={{ textAlign: 'center', padding: 20 }}>Belum ada menu.</td></tr>
                 )}
@@ -247,13 +318,14 @@ export default function Menus() {
             <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
               Isi data menu utama yang akan ditampilkan di sidebar.
             </p>
+            {formError && <div className="alert alert-error">{formError}</div>}
+            {!editTarget && (
+              <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+                Menu baru akan ditempatkan di urutan paling akhir. Ubah urutan via drag-and-drop di tabel.
+              </p>
+            )}
             <form onSubmit={submitForm} className="form-grid">
-              <div className="form-group">
-                <label>Sequence *</label>
-                <small style={{ color: 'var(--text-muted)' }}>Urutan tampil menu (contoh: 10, 20, 30)</small>
-                <input value={form.menu_sequence} onChange={(e) => setForm((p) => ({ ...p, menu_sequence: e.target.value }))} />
-              </div>
-              <div className="form-group">
+              <div className="form-group span-full">
                 <label>Nama Menu *</label>
                 <small style={{ color: 'var(--text-muted)' }}>Nama grup menu di sidebar</small>
                 <input value={form.menu_name} onChange={(e) => setForm((p) => ({ ...p, menu_name: e.target.value }))} />
@@ -316,6 +388,9 @@ export default function Menus() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

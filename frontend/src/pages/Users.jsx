@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getUsers, updateUser, register, deleteUser } from '../services/api';
 import { decodeToken } from '../utils/token';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const ROLE_LABELS = {
   1: 'Admin',
@@ -164,12 +165,6 @@ export default function Users() {
         </button>
       </div>
 
-      {fetchError && <div className="alert alert-error" style={{ marginBottom: 16 }}>{fetchError}</div>}
-      {formError && <div className="alert alert-error" style={{ marginBottom: 16 }}>{formError}</div>}
-      {formSuccess && <div className="alert alert-success" style={{ marginBottom: 16 }}>{formSuccess}</div>}
-      {editError && <div className="alert alert-error" style={{ marginBottom: 16 }}>{editError}</div>}
-      {editSuccess && <div className="alert alert-success" style={{ marginBottom: 16 }}>{editSuccess}</div>}
-
       {/* ─── Form Tambah User ─────────────────────────────────────── */}
       {showForm && (
         <div className="card" style={{ marginBottom: 24 }}>
@@ -177,6 +172,7 @@ export default function Users() {
             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-h)', margin: 0 }}>Tambah User Baru</h3>
           </div>
           <form onSubmit={handleAddSubmit} style={{ padding: '0 28px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div className="form-group">
                 <label htmlFor="user_name">Username</label>
@@ -218,6 +214,8 @@ export default function Users() {
           </form>
         </div>
       )}
+
+      {editError && <div className="alert alert-error" style={{ marginBottom: 16 }}>{editError}</div>}
 
       {/* ─── Tabel Users ─────────────────────────────────────────── */}
       <div className="card">
@@ -326,6 +324,10 @@ export default function Users() {
         onConfirm={handleDeleteUser}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!fetchError} type="error" message={fetchError} onClose={() => setFetchError('')} />
+      <FeedbackModal open={!!formSuccess} type="success" message={formSuccess} onClose={() => setFormSuccess('')} />
+      <FeedbackModal open={!!editSuccess} type="success" message={editSuccess} onClose={() => setEditSuccess('')} />
     </div>
   );
 }

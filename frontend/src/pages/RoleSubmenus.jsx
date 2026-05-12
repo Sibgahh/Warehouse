@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoleSubmenu, deleteRoleSubmenu, getRoleSubmenus, getRoles, getSubmenus } from '../services/api';
 import { Link } from 'react-router-dom';
+import FeedbackModal from '../components/FeedbackModal';
 
 export default function RoleSubmenus() {
   const [roles, setRoles] = useState([]);
@@ -125,9 +126,6 @@ export default function RoleSubmenus() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="card" style={{ marginBottom: 16, padding: 16 }}>
         <h3 style={{ marginTop: 0, marginBottom: 8 }}>Cara pakai</h3>
         <p style={{ margin: 0, color: 'var(--text-muted)' }}>
@@ -212,6 +210,9 @@ export default function RoleSubmenus() {
           </div>
         )}
       </div>
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createOrderStatus, deleteOrderStatus, getOrderStatuses, updateOrderStatus } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const EMPTY = { status_code: '', status_name: '' };
 
@@ -10,6 +11,7 @@ export default function OrderStatuses() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -38,7 +40,11 @@ export default function OrderStatuses() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.status_code.trim() || !form.status_name.trim()) return flash('Code dan nama status wajib diisi.');
+    if (!form.status_code.trim() || !form.status_name.trim()) {
+      setFormError('Code dan nama status wajib diisi.');
+      return;
+    }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = { status_code: form.status_code.trim(), status_name: form.status_name.trim() };
@@ -78,11 +84,8 @@ export default function OrderStatuses() {
           <h1>Order Statuses</h1>
           <p className="page-subtitle">Kelola master status order</p>
         </div>
-        <button className="btn-primary" onClick={() => { setEditTarget(null); setForm(EMPTY); setShowForm(true); }}>+ Tambah Status</button>
+        <button className="btn-primary" onClick={() => { setEditTarget(null); setFormError(''); setForm(EMPTY); setShowForm(true); }}>+ Tambah Status</button>
       </div>
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="card">
         {loading ? <div className="table-loading"><span className="spinner large" /></div> : (
           <div className="table-wrapper">
@@ -96,7 +99,7 @@ export default function OrderStatuses() {
                     <td className="text-bold">{r.status_name}</td>
                     <td>{r._count?.orders || 0}</td>
                     <td className="cell-actions">
-                      <button className="btn-icon btn-edit" onClick={() => { setEditTarget(r); setForm({ status_code: r.status_code, status_name: r.status_name }); setShowForm(true); }}>✎</button>
+                      <button className="btn-icon btn-edit" onClick={() => { setEditTarget(r); setFormError(''); setForm({ status_code: r.status_code, status_name: r.status_name }); setShowForm(true); }}>✎</button>
                       <button className="btn-icon btn-delete" onClick={() => setDeleteTarget(r)}>✕</button>
                     </td>
                   </tr>
@@ -111,6 +114,7 @@ export default function OrderStatuses() {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{editTarget ? 'Edit Order Status' : 'Tambah Order Status'}</h2>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <form onSubmit={submit} className="form-grid">
               <div className="form-group"><label>Status Code *</label><input value={form.status_code} onChange={(e) => setForm((p) => ({ ...p, status_code: e.target.value }))} /></div>
               <div className="form-group"><label>Status Name *</label><input value={form.status_name} onChange={(e) => setForm((p) => ({ ...p, status_name: e.target.value }))} /></div>
@@ -132,6 +136,9 @@ export default function OrderStatuses() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }

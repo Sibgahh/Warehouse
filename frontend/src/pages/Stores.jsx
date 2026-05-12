@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createStore, deleteStore, getStores, updateStore } from '../services/api';
 import ModalDialog from '../components/ModalDialog';
+import FeedbackModal from '../components/FeedbackModal';
 
 const EMPTY = {
   store_code: '',
@@ -19,6 +20,7 @@ export default function Stores() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -55,12 +57,14 @@ export default function Stores() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setFormError('');
     setForm(EMPTY);
     setShowForm(true);
   };
 
   const openEdit = (store) => {
     setEditTarget(store);
+    setFormError('');
     setForm({
       store_code: store.store_code || '',
       store_name: store.store_name || '',
@@ -77,9 +81,10 @@ export default function Stores() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.store_code.trim() || !form.store_name.trim()) {
-      flash('Kode dan nama store wajib diisi.');
+      setFormError('Kode dan nama store wajib diisi.');
       return;
     }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload = { ...form, store_code: form.store_code.trim(), store_name: form.store_name.trim() };
@@ -122,9 +127,6 @@ export default function Stores() {
         <button className="btn-primary" onClick={openCreate}>+ Tambah Store</button>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
       <div className="card">
         {loading ? (
           <div className="table-loading"><span className="spinner large" /></div>
@@ -166,6 +168,7 @@ export default function Stores() {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{editTarget ? 'Edit Store' : 'Tambah Store'}</h2>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <form onSubmit={submit} className="form-grid">
               <div className="form-group"><label>Kode *</label><input value={form.store_code} onChange={(e) => setForm((p) => ({ ...p, store_code: e.target.value }))} /></div>
               <div className="form-group"><label>Nama *</label><input value={form.store_name} onChange={(e) => setForm((p) => ({ ...p, store_name: e.target.value }))} /></div>
@@ -193,6 +196,9 @@ export default function Stores() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <FeedbackModal open={!!error} type="error" message={error} onClose={() => setError('')} />
+      <FeedbackModal open={!!success} type="success" message={success} onClose={() => setSuccess('')} />
     </div>
   );
 }
